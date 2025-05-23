@@ -19,7 +19,6 @@ public class Room {
     @Id
     private String id;
     
-    @Indexed
     private String cinemaId;
     
     private String roomNumber;

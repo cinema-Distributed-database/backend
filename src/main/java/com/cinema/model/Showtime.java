@@ -18,16 +18,12 @@ public class Showtime {
     @Id
     private String id;
     
-    @Indexed
     private String movieId;
     
-    @Indexed
     private String cinemaId;
     
-    @Indexed
     private String roomId;
     
-    @Indexed
     private LocalDateTime showDateTime;
     
     private String screenType;

@@ -20,7 +20,6 @@ public class Booking {
     
     private CustomerInfo customerInfo;
     
-    @Indexed
     private String showtimeId;
     
     private LocalDateTime bookingTime;
@@ -32,7 +31,6 @@ public class Booking {
     private String paymentMethod;
     private String paymentReference;
     
-    @Indexed
     private String confirmationCode;
     
     private LocalDateTime createdAt;
