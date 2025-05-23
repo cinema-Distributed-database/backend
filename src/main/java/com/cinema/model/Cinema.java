@@ -23,7 +23,6 @@ public class Cinema {
     private String city;
     private String image;
     
-    @GeoSpatialIndexed(type = GeoSpatialIndexType.GEO_2DSPHERE)
     private GeoJsonPoint location;
     
     private Contact contact;
