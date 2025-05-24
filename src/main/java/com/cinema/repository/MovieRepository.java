@@ -3,6 +3,7 @@ package com.cinema.repository;
 import com.cinema.model.Movie;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.repository.Aggregation;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -24,18 +25,22 @@ public interface MovieRepository extends MongoRepository<Movie, String> {
     
     List<Movie> findTop10ByIsActiveTrueOrderByReleaseDateDesc();
     
-    @Query(value = "{}", fields = "{ 'genres': 1 }")
-    List<Movie> findAllGenres();
-    
-    @Query("{ 'isActive': true }")
-    List<Movie> findActiveMovies();
-    
-    @Query("[ { $match: { 'isActive': true } }, { $unwind: '$genres' }, { $group: { '_id': '$genres' } }, { $project: { '_id': 1 } } ]")
-    default List<String> findDistinctGenres() {
-        return findAllGenres().stream()
-                .flatMap(movie -> movie.getGenres().stream())
-                .distinct()
-                .sorted()
-                .toList();
+    @Aggregation(pipeline = {
+    "{ $match: { 'isActive': true } }", // Lọc phim active
+    "{ $unwind: '$genres' }",           // Tách mỗi genre trong mảng genres thành một document riêng
+    "{ $group: { '_id': '$genres' } }", // Nhóm theo genre để lấy distinct
+    "{ $sort: { '_id': 1 } }",           // Sắp xếp theo tên genre
+    "{ $project: { 'genre': '$_id', '_id': 0 } }" // Đổi tên _id thành genre và chỉ lấy trường genre
+    })
+    List<GenreProjection> findDistinctGenres(); // Trả về list các object chỉ chứa genre
+
+    // Interface hoặc class để project kết quả
+    interface GenreProjection {
+        String getGenre();
     }
+
+    // Hoặc nếu bạn muốn một method khác để lấy tất cả genres (không distinct) từ các phim active:
+    @Query(value = "{'isActive': true}", fields = "{'genres': 1, '_id': 0}")
+    List<Movie> findActiveMoviesGenres();
+    
 }

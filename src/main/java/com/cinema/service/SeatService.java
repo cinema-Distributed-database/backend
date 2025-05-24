@@ -53,7 +53,7 @@ public class SeatService {
                     String seatId = entry.getKey();
                     Showtime.SeatStatus status = entry.getValue();
 
-                    if ("holding".equals(status.getStatus())) { // Sử dụng hằng số/enum nếu có
+                    if (SeatState.HOLDING.equals(status.getStatus())) { 
                         if (status.getHoldStartedAt() != null &&
                             status.getHoldStartedAt().isBefore(expiryThreshold)) {
 
@@ -97,8 +97,8 @@ public class SeatService {
             dto.setTotalSeats(showtime.getTotalSeats());
             
             if (showtime.getSeatStatus() != null) {
-                long holdingCount = showtime.getSeatStatus().values().stream().filter(s -> "holding".equals(s.getStatus())).count();
-                long bookedCount = showtime.getSeatStatus().values().stream().filter(s -> "booked".equals(s.getStatus())).count();
+                long holdingCount = showtime.getSeatStatus().values().stream().filter(s -> SeatState.HOLDING.equals(s.getStatus())).count();
+                long bookedCount = showtime.getSeatStatus().values().stream().filter(s -> SeatState.BOOKED.equals(s.getStatus())).count();
                 dto.setHoldingSeats((int) holdingCount);
                 dto.setBookedSeats((int) bookedCount);
                 dto.setAvailableSeats(showtime.getTotalSeats() - (int) holdingCount - (int) bookedCount);
@@ -115,6 +115,7 @@ public class SeatService {
     /**
      * Giữ ghế cho khách hàng.
      */
+    // Trong phương thức holdSeats
     @Transactional
     public boolean holdSeats(String showtimeId, List<String> seatIds, String customerPhone) {
         log.info("Attempting to hold seats for showtimeId: {}, seats: {}", showtimeId, seatIds);
@@ -126,19 +127,26 @@ public class SeatService {
             seatStatusMap = new ConcurrentHashMap<>();
             showtime.setSeatStatus(seatStatusMap);
         }
-        
-        // Giữ tất cả ghế
+
+        for (String seatId : seatIds) {
+            Showtime.SeatStatus currentStatus = seatStatusMap.get(seatId);
+            if (currentStatus != null && !SeatState.AVAILABLE.equals(currentStatus.getStatus())) {
+                log.warn("Ghế {} không còn trống hoặc không hợp lệ để giữ. Trạng thái hiện tại: {}", seatId, currentStatus.getStatus());
+                throw new IllegalStateException("Ghế " + seatId + " không còn trống hoặc đã được giữ.");
+            }
+        }
+
         LocalDateTime now = LocalDateTime.now();
         for (String seatId : seatIds) {
-            Showtime.SeatStatus newStatus = new Showtime.SeatStatus();
-            newStatus.setStatus(SeatState.HOLDING); // Giả sử có Enum SeatStatusValue
+            Showtime.SeatStatus newStatus = seatStatusMap.getOrDefault(seatId, new Showtime.SeatStatus()); 
+            newStatus.setStatus(SeatState.HOLDING);
             newStatus.setHoldStartedAt(now);
             seatStatusMap.put(seatId, newStatus);
             log.debug("Đã giữ ghế: ShowtimeID={}, SeatID={}, HeldAt={}", showtimeId, seatId, now);
         }
 
         updateAvailableSeatsCount(showtime);
-        showtime.setHasHoldingSeats(true); // CẬP NHẬT CỜ KHI GIỮ GHẾ
+        showtime.setHasHoldingSeats(true);
         showtimeRepository.save(showtime);
         log.info("Đã giữ thành công {} ghế cho Showtime {}: {}", seatIds.size(), showtimeId, seatIds);
         return true;
@@ -162,7 +170,7 @@ public class SeatService {
         boolean releasedAny = false;
         for (String seatId : seatIds) {
             Showtime.SeatStatus currentStatus = seatStatusMap.get(seatId);
-            if (currentStatus != null && "holding".equals(currentStatus.getStatus())) {
+            if (currentStatus != null && SeatState.HOLDING.equals(currentStatus.getStatus())) {
                 // Chỉ giải phóng ghế đang "holding"
                 currentStatus.setStatus(SeatState.AVAILABLE);
                 currentStatus.setHoldStartedAt(null);
@@ -177,8 +185,11 @@ public class SeatService {
 
         if (releasedAny) {
             updateAvailableSeatsCount(showtime);
+            boolean stillHasHolding = showtime.getSeatStatus().values().stream()
+                                            .anyMatch(s -> SeatState.HOLDING.equals(s.getStatus()));
+            showtime.setHasHoldingSeats(stillHasHolding);
             showtimeRepository.save(showtime);
-            log.info("Đã giải phóng thành công một số ghế cho Showtime {}: {}", showtimeId, seatIds.stream().filter(s -> seatStatusMap.get(s) != null && "available".equals(seatStatusMap.get(s).getStatus())).collect(Collectors.toList()));
+            log.info("Đã giải phóng thành công một số ghế cho Showtime {}: {}", showtimeId, seatIds.stream().filter(s -> seatStatusMap.get(s) != null && SeatState.AVAILABLE.equals(seatStatusMap.get(s).getStatus())).collect(Collectors.toList()));
         }
         return releasedAny;
     }
@@ -206,7 +217,7 @@ public class SeatService {
         for (String seatId : seatIds) {
             Showtime.SeatStatus currentStatus = seatStatusMap.get(seatId);
             // Chỉ gia hạn ghế đang "holding" và chưa hết hạn (hoặc có một khoảng thời gian gia hạn cho phép)
-            if (currentStatus != null && "holding".equals(currentStatus.getStatus())) {
+            if (currentStatus != null && SeatState.HOLDING.equals(currentStatus.getStatus())) {
                 if (currentStatus.getHoldStartedAt() != null && currentStatus.getHoldStartedAt().isAfter(currentExpiryThreshold)) {
                      currentStatus.setHoldStartedAt(now); // Reset thời gian bắt đầu giữ
                      log.debug("Đã gia hạn giữ ghế: ShowtimeID={}, SeatID={}, NewHoldStartAt={}", showtimeId, seatId, now);
@@ -249,7 +260,7 @@ public class SeatService {
 
         for (String seatId : seatIds) {
             Showtime.SeatStatus currentStatus = seatStatusMap.get(seatId);
-            if (currentStatus == null || !"holding".equals(currentStatus.getStatus())) {
+            if (currentStatus == null || !SeatState.HOLDING.equals(currentStatus.getStatus())) {
                 // Nếu ghế không được tìm thấy hoặc không ở trạng thái "holding" (có thể đã bị người khác đặt hoặc hết hạn)
                 log.error("Không thể xác nhận ghế {}: không ở trạng thái 'holding' hoặc không tồn tại. Showtime: {}, Booking: {}", seatId, showtimeId, bookingId);
                 // Xử lý lỗi: có thể hủy booking hoặc thông báo lỗi nghiêm trọng
@@ -278,7 +289,7 @@ public class SeatService {
             return;
         }
         long unavailableCount = showtime.getSeatStatus().values().stream()
-                .filter(status -> "holding".equals(status.getStatus()) || "booked".equals(status.getStatus()))
+                .filter(status -> SeatState.HOLDING.equals(status.getStatus()) || SeatState.BOOKED.equals(status.getStatus()))
                 .count();
         showtime.setAvailableSeats(showtime.getTotalSeats() - (int) unavailableCount);
         log.debug("Cập nhật số ghế trống cho Showtime {}: Tổng={}, Không khả dụng={}, Trống={}",
