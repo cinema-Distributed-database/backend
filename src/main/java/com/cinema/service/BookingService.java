@@ -4,8 +4,7 @@ import com.cinema.config.AppProperties; //
 import com.cinema.dto.request.CreateBookingRequest; //
 import com.cinema.dto.response.BookingAggregatedDetailsDto;
 import com.cinema.dto.response.BookingDetailsDto; //
-import com.cinema.enums.PaymentMethodType; // Import
-import com.cinema.enums.PaymentStatusType; // Import
+import com.cinema.enums.*;
 import com.cinema.model.*; 
 import com.cinema.repository.*; 
 import lombok.RequiredArgsConstructor;
@@ -41,7 +40,7 @@ public class BookingService {
         Showtime showtime = showtimeRepository.findById(request.getShowtimeId()) //
                 .orElseThrow(() -> new IllegalArgumentException("Showtime không tồn tại: " + request.getShowtimeId()));
         
-        if (!"active".equalsIgnoreCase(showtime.getStatus().toString())) { //
+        if (!ShowtimeStatus.ACTIVE.equals(showtime.getStatus())) { //
             throw new IllegalArgumentException("Suất chiếu không còn hoạt động.");
         }
         if (showtime.getShowDateTime().isBefore(LocalDateTime.now())) { //
@@ -113,12 +112,21 @@ public class BookingService {
         Booking savedBooking = bookingRepository.save(booking); //
         log.info("Đã tạo booking thành công với ID: {} và mã xác nhận: {}", savedBooking.getId(), savedBooking.getConfirmationCode()); //
 
-        boolean seatsConfirmed = seatService.confirmSeatBooking(showtime.getId(), request.getSeats(), savedBooking.getId()); //
-        if (!seatsConfirmed) { //
-            log.error("Không thể xác nhận ghế cho booking {}. Cần xử lý rollback.", savedBooking.getId()); //
-            savedBooking.setPaymentStatus(PaymentStatusType.FAILED); // Hoặc một trạng thái lỗi cụ thể
-            bookingRepository.save(savedBooking);
-            throw new IllegalStateException("Lỗi hệ thống: Không thể xác nhận ghế đã chọn. Vui lòng thử lại."); //
+// Kiểm tra và giữ ghế trước khi tạo booking
+boolean seatsHeld = seatService.holdSeats(showtime.getId(), request.getSeats(), request.getCustomerInfo().getPhone());
+if (!seatsHeld) {
+    throw new IllegalStateException("Không thể giữ ghế đã chọn. Ghế có thể đã được đặt hoặc đang được giữ bởi người khác.");
+}
+
+        log.info("Đã tạo booking thành công với ID: {} và mã xác nhận: {}", savedBooking.getId(), savedBooking.getConfirmationCode());
+
+        boolean seatsConfirmed = seatService.confirmSeatBooking(showtime.getId(), request.getSeats(), savedBooking.getId());
+        if (!seatsConfirmed) {
+            log.error("Không thể xác nhận ghế cho booking {}. Rolling back.", savedBooking.getId());
+            // Rollback: release seats và delete booking
+            seatService.releaseSeats(showtime.getId(), request.getSeats());
+            bookingRepository.delete(savedBooking);
+            throw new IllegalStateException("Lỗi hệ thống: Không thể xác nhận ghế đã chọn. Vui lòng thử lại.");
         }
         log.info("Đã xác nhận ghế cho booking: {}", savedBooking.getId()); //
         return getBookingDetailsDto(savedBooking); //
