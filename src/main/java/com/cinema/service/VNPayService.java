@@ -217,19 +217,28 @@ public class VNPayService implements IVNPayService {
         // Chỉ cập nhật trạng thái và booking nếu giao dịch đang PENDING
         // để tránh xử lý lặp lại nếu IPN và Return URL đến gần như đồng thời
         if (payment.getStatus() == PaymentStatusType.PENDING) {
-            if ("00".equals(vnpResponseCode)) { // Mã 00: Giao dịch thành công
-                payment.setStatus(PaymentStatusType.COMPLETED);
-                payment.setPaidAt(LocalDateTime.now());
-                log.info("[{}] Thanh toán VNPay thành công cho PaymentID: {}, BookingID: {}, TxnRef: {}", 
-                         logContext, payment.getId(), payment.getBookingId(), vnpTxnRef);
-                
-                // Cập nhật trạng thái Booking
-                bookingService.confirmBookingPayment(
+        if ("00".equals(vnpResponseCode)) {
+            payment.setStatus(PaymentStatusType.COMPLETED);
+            payment.setPaidAt(LocalDateTime.now());
+            log.info("[{}] Thanh toán VNPay thành công cho PaymentID: {}, BookingID: {}, TxnRef: {}",
+                     logContext, payment.getId(), payment.getBookingId(), vnpTxnRef);
+
+            // Gọi BookingService để xác nhận booking và ghế TRONG CÙNG GIAO DỊCH
+            try {
+                bookingService.finalizeSuccessfulPayment(
                     payment.getBookingId(),
-                    PaymentMethodType.VNPAY, 
-                    payment.getTransactionId() // Sử dụng vnp_TxnRef làm paymentReference cho Booking
+                    PaymentMethodType.VNPAY,
+                    payment.getTransactionId()
                 );
-            } else { // Các mã lỗi khác: Giao dịch thất bại
+                log.info("Hoàn tất thành công payment và booking cho PaymentID: {}", payment.getId());
+            } catch (Exception e) {
+                // Nếu finalizeSuccessfulPayment (bao gồm confirmSeatBooking) thất bại
+                log.error("LỖI NGHIÊM TRỌNG: Thanh toán VNPay thành công (TxnRef: {}) NHƯNG không thể hoàn tất booking (ID: {}). Giao dịch sẽ được rollback. Lỗi: {}", vnpTxnRef, payment.getBookingId(), e.getMessage(), e);
+                // Ném một runtime exception để đảm bảo transaction rollback
+                throw new RuntimeException("Không thể hoàn tất booking sau khi thanh toán thành công. TxnRef: " + vnpTxnRef + ", BookingID: " + payment.getBookingId(), e);
+            }
+
+        } else { // Các mã lỗi khác: Giao dịch thất bại
                 payment.setStatus(PaymentStatusType.FAILED);
                 log.info("[{}] Thanh toán VNPay thất bại cho PaymentID: {}, BookingID: {}, TxnRef: {}, ResponseCode: {}",
                          logContext, payment.getId(), payment.getBookingId(), vnpTxnRef, vnpResponseCode);

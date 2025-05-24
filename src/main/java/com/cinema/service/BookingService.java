@@ -224,4 +224,32 @@ public class BookingService {
             showDateTime
         );
     }
+
+    // Phương thức mới hoặc sửa đổi từ confirmBookingPayment
+public BookingDetailsDto finalizeSuccessfulPayment(String bookingId, PaymentMethodType paymentMethod, String paymentTransactionId) {
+    log.info("Hoàn tất booking sau thanh toán thành công cho ID: {}, Phương thức: {}, Tham chiếu TT: {}", bookingId, paymentMethod, paymentTransactionId);
+    Booking booking = bookingRepository.findById(bookingId)
+            .orElseThrow(() -> new IllegalArgumentException("Booking không tồn tại: " + bookingId));
+
+    if (booking.getPaymentStatus() == PaymentStatusType.COMPLETED) {
+        log.warn("Booking {} đã được hoàn tất thanh toán trước đó.", bookingId);
+        return getBookingDetailsDto(booking); // Trả về thông tin hiện tại
+    }
+
+    booking.setPaymentStatus(PaymentStatusType.COMPLETED);
+    booking.setPaymentMethod(paymentMethod);
+    booking.setPaymentReference(paymentTransactionId);
+    booking.setUpdatedAt(LocalDateTime.now());
+
+    Booking updatedBooking = bookingRepository.save(booking);
+    log.info("Đã cập nhật trạng thái thanh toán thành công cho booking: {}", updatedBooking.getId());
+
+    // Xác nhận ghế (chuyển từ HOLDING sang BOOKED)
+    // Nếu bước này thất bại, Exception sẽ được ném ra và transaction ở VNPayService sẽ rollback
+    seatService.confirmSeatBooking(updatedBooking.getShowtimeId(), updatedBooking.getSeats(), updatedBooking.getId());
+    log.info("Đã xác nhận (BOOKED) ghế thành công cho bookingId: {}", updatedBooking.getId());
+
+    return getBookingDetailsDto(updatedBooking);
+}
+
 }
