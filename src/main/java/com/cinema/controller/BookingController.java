@@ -11,7 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import com.cinema.enums.*;
 @Slf4j
 @RestController
 @RequestMapping("/api/bookings")
@@ -86,7 +86,8 @@ public class BookingController {
             @RequestParam String paymentReference) { // Ví dụ: "ADMIN_USER_XYZ", "VNPAY_TRANS_ID_123"
         try {
             log.info("Request xác nhận thanh toán cho bookingId: {}, method: {}, ref: {}", id, paymentMethod, paymentReference);
-            BookingDetailsDto bookingDetails = bookingService.confirmBookingPayment(id, paymentMethod, paymentReference);
+            PaymentMethodType paymentMethodType = PaymentMethodType.valueOf(paymentMethod.toUpperCase());
+            BookingDetailsDto bookingDetails = bookingService.confirmBookingPayment(id, paymentMethodType, paymentReference);
             return ResponseEntity.ok(ApiResponse.success("Booking đã được xác nhận thanh toán.", bookingDetails));
         } catch (IllegalArgumentException | IllegalStateException e) {
             log.warn("Lỗi khi xác nhận thanh toán booking {}: {}", id, e.getMessage());

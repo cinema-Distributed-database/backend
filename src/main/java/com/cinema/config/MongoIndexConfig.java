@@ -31,6 +31,7 @@ public class MongoIndexConfig {
         createMovieIndexes();
         createShowtimeIndexes();
         createBookingIndexes();
+        createPaymentIndexes();
         createConcessionIndexes();
         log.info("MongoDB index creation process finished.");
     }
@@ -231,5 +232,34 @@ public class MongoIndexConfig {
         log.info("Created index: idx_concession_cinemaIds on concessions");
         
         log.info("Concession indexes ensured.");
+    }
+
+    // *** ADDED METHOD ***
+    private void createPaymentIndexes() {
+        IndexOperations ops = mongoTemplate.indexOps(Payment.class); // Sử dụng Payment model bạn đã tạo
+
+        ops.ensureIndex(new Index()
+                .on("transactionId", Sort.Direction.ASC) // vnp_TxnRef
+                .unique() // Mã giao dịch của VNPay nên là duy nhất
+                .named("idx_payment_transactionId_unique"));
+        log.info("Ensured unique index: idx_payment_transactionId_unique on payments collection");
+
+        ops.ensureIndex(new Index()
+                .on("bookingId", Sort.Direction.ASC)
+                .named("idx_payment_bookingId"));
+        log.info("Ensured index: idx_payment_bookingId on payments collection");
+
+        ops.ensureIndex(new Index()
+                .on("status", Sort.Direction.ASC)
+                .on("createdAt", Sort.Direction.DESC)
+                .named("idx_payment_status_createdAt"));
+        log.info("Ensured index: idx_payment_status_createdAt on payments collection");
+        
+        ops.ensureIndex(new Index()
+                .on("paymentMethod", Sort.Direction.ASC)
+                .named("idx_payment_paymentMethod"));
+        log.info("Ensured index: idx_payment_paymentMethod on payments collection");
+
+        log.info("Payment collection indexes ensured.");
     }
 }
