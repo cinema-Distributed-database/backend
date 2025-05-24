@@ -40,8 +40,9 @@ public class BookingService {
         Showtime showtime = showtimeRepository.findById(request.getShowtimeId()) //
                 .orElseThrow(() -> new IllegalArgumentException("Showtime không tồn tại: " + request.getShowtimeId()));
 
-        if (!ShowtimeStatus.ACTIVE.equals(showtime.getStatus())) { //
-            throw new IllegalArgumentException("Suất chiếu không còn hoạt động.");
+        if (showtime.getStatus() == null || !ShowtimeStatus.ACTIVE.equals(showtime.getStatus())) { 
+            log.warn("Suất chiếu {} không ở trạng thái ACTIVE. Trạng thái hiện tại: {}", request.getShowtimeId(), showtime.getStatus());
+            throw new IllegalArgumentException("Suất chiếu không còn hoạt động hoặc trạng thái không hợp lệ.");
         }
         if (showtime.getShowDateTime().isBefore(LocalDateTime.now())) { //
             throw new IllegalArgumentException("Suất chiếu đã diễn ra.");

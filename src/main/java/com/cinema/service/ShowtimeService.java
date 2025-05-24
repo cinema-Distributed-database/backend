@@ -2,6 +2,8 @@ package com.cinema.service;
 
 import com.cinema.model.Showtime;
 import com.cinema.repository.ShowtimeRepository;
+import com.cinema.enums.ShowtimeStatus; // THÊM IMPORT NẾU CHƯA CÓ
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,40 +20,62 @@ import java.util.Optional;
 public class ShowtimeService {
 
     private final ShowtimeRepository showtimeRepository;
-    private static final String ACTIVE_STATUS = "active"; // Hoặc một enum
+    // private static final String ACTIVE_STATUS = "active"; // Không cần nữa nếu dùng Enum trực tiếp
 
     /**
      * Lấy danh sách suất chiếu có filter.
      */
-    public List<Showtime> getShowtimes(String movieId, String cinemaId, LocalDate date, String status) {
+    public List<Showtime> getShowtimes(String movieId, String cinemaId, LocalDate date, String statusString) {
         LocalDateTime startOfDay = date != null ? date.atStartOfDay() : null;
         LocalDateTime endOfDay = date != null ? date.atTime(LocalTime.MAX) : null;
-        String queryStatus = (status == null || status.trim().isEmpty()) ? ACTIVE_STATUS : status;
+        
+        ShowtimeStatus queryStatusEnum = null;
+        if (statusString != null && !statusString.trim().isEmpty()) {
+            try {
+                queryStatusEnum = ShowtimeStatus.fromValue(statusString);
+            } catch (IllegalArgumentException e) {
+                log.warn("Trạng thái suất chiếu không hợp lệ: {}. Mặc định sẽ không lọc theo trạng thái này.", statusString);
+                // Hoặc có thể ném lỗi tùy theo yêu cầu nghiệp vụ
+            }
+        } else {
+            queryStatusEnum = ShowtimeStatus.ACTIVE; // Mặc định là ACTIVE
+        }
+        
+        final String finalStatusValue = (queryStatusEnum != null) ? queryStatusEnum.getValue() : null;
 
-        log.debug("Fetching showtimes with movieId: {}, cinemaId: {}, date: {}, status: {}", 
-                  movieId, cinemaId, date, queryStatus);
+
+        log.debug("Fetching showtimes with movieId: {}, cinemaId: {}, date: {}, status: {} (enum: {})",
+                  movieId, cinemaId, date, statusString, queryStatusEnum);
 
         if (movieId != null && cinemaId != null && date != null) {
             return showtimeRepository.findByMovieIdAndCinemaIdAndShowDateTimeBetweenAndStatus(
-                    movieId, cinemaId, startOfDay, endOfDay, queryStatus);
+                    movieId, cinemaId, startOfDay, endOfDay, finalStatusValue);
         } else if (movieId != null && date != null) {
             return showtimeRepository.findByMovieIdAndShowDateTimeBetweenAndStatus(
-                    movieId, startOfDay, endOfDay, queryStatus);
+                    movieId, startOfDay, endOfDay, finalStatusValue);
         } else if (cinemaId != null && date != null) {
             return showtimeRepository.findByCinemaIdAndShowDateTimeBetweenAndStatus(
-                    cinemaId, startOfDay, endOfDay, queryStatus);
+                    cinemaId, startOfDay, endOfDay, finalStatusValue);
         } else if (date != null) {
-            return showtimeRepository.findByShowDateTimeBetweenAndStatus(startOfDay, endOfDay, queryStatus);
+            return showtimeRepository.findByShowDateTimeBetweenAndStatus(startOfDay, endOfDay, finalStatusValue);
         } else if (movieId != null && cinemaId != null) {
-            // Lọc theo movieId và cinemaId không theo ngày cụ thể (có thể lấy tất cả suất chiếu active)
-            // Điều này có thể trả về nhiều kết quả, cần cân nhắc hoặc thêm Pageable
-            return showtimeRepository.findByMovieIdAndCinemaIdAndShowDateTimeBetweenAndStatus(movieId, cinemaId, LocalDateTime.now().minusYears(1), LocalDateTime.now().plusYears(1), queryStatus);
+            return showtimeRepository.findByMovieIdAndCinemaIdAndShowDateTimeBetweenAndStatus(movieId, cinemaId, LocalDateTime.now().minusYears(1), LocalDateTime.now().plusYears(1), finalStatusValue);
         } else if (movieId != null) {
-            return showtimeRepository.findByMovieIdAndStatus(movieId, queryStatus);
+            return showtimeRepository.findByMovieIdAndStatus(movieId, finalStatusValue);
         } else if (cinemaId != null) {
-            return showtimeRepository.findByCinemaIdAndStatus(cinemaId, queryStatus);
+            return showtimeRepository.findByCinemaIdAndStatus(cinemaId, finalStatusValue);
+        } else if (finalStatusValue != null) { // Chỉ lọc theo status nếu có
+            return showtimeRepository.findByStatus(finalStatusValue);
         } else {
-            return showtimeRepository.findByStatus(queryStatus);
+             // Nếu không có filter nào và status cũng không có, có thể trả về tất cả hoặc lỗi
+             // Hiện tại đang trả về tất cả nếu statusString ban đầu là không hợp lệ và không có filter khác.
+             // Để an toàn hơn, nếu finalStatusValue là null ở đây, nên có một logic rõ ràng.
+             // Ví dụ, trả về tất cả các suất chiếu ACTIVE nếu không có status cụ thể.
+             // Hoặc ném lỗi nếu không muốn trả về quá nhiều dữ liệu.
+             // Nếu queryStatusEnum ban đầu là null do statusString không hợp lệ, finalStatusValue sẽ là null.
+             // Nếu bạn muốn mặc định là ACTIVE khi statusString không hợp lệ:
+             String effectiveStatus = (finalStatusValue != null) ? finalStatusValue : ShowtimeStatus.ACTIVE.getValue();
+            return showtimeRepository.findByStatus(effectiveStatus);
         }
     }
 
@@ -60,8 +84,7 @@ public class ShowtimeService {
      */
     public Optional<Showtime> getShowtimeById(String id) {
         log.debug("Fetching showtime by id: {}", id);
-        return showtimeRepository.findByIdAndStatus(id, ACTIVE_STATUS);
-        // Hoặc return showtimeRepository.findById(id) nếu muốn lấy cả suất chiếu không active
+        return showtimeRepository.findByIdAndStatus(id, ShowtimeStatus.ACTIVE.getValue());
     }
 
     /**
@@ -71,7 +94,7 @@ public class ShowtimeService {
          LocalDateTime startOfDay = date != null ? date.atStartOfDay() : LocalDateTime.now().toLocalDate().atStartOfDay() ;
          LocalDateTime endOfDay = date != null ? date.atTime(LocalTime.MAX) : LocalDateTime.now().toLocalDate().atTime(LocalTime.MAX);
         log.debug("Fetching showtimes for movieId: {} from {} to {}", movieId, startOfDay, endOfDay);
-        return showtimeRepository.findByMovieIdAndShowDateTimeBetweenAndStatus(movieId, startOfDay, endOfDay, ACTIVE_STATUS);
+        return showtimeRepository.findByMovieIdAndShowDateTimeBetweenAndStatus(movieId, startOfDay, endOfDay, ShowtimeStatus.ACTIVE.getValue());
     }
 
     /**
@@ -81,7 +104,7 @@ public class ShowtimeService {
         LocalDateTime startOfDay = date != null ? date.atStartOfDay() : LocalDateTime.now().toLocalDate().atStartOfDay();
         LocalDateTime endOfDay = date != null ? date.atTime(LocalTime.MAX) : LocalDateTime.now().toLocalDate().atTime(LocalTime.MAX);
         log.debug("Fetching showtimes for cinemaId: {} from {} to {}", cinemaId, startOfDay, endOfDay);
-        return showtimeRepository.findByCinemaIdAndShowDateTimeBetweenAndStatus(cinemaId, startOfDay, endOfDay, ACTIVE_STATUS);
+        return showtimeRepository.findByCinemaIdAndShowDateTimeBetweenAndStatus(cinemaId, startOfDay, endOfDay, ShowtimeStatus.ACTIVE.getValue());
     }
     
     /**
@@ -89,12 +112,11 @@ public class ShowtimeService {
      */
     public List<Showtime> getShowtimesByDate(LocalDate date) {
         if (date == null) {
-            // Mặc định lấy ngày hiện tại nếu không cung cấp
             date = LocalDate.now();
         }
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
         log.debug("Fetching showtimes for date: {} ({} to {})", date, startOfDay, endOfDay);
-        return showtimeRepository.findByShowDateTimeBetweenAndStatus(startOfDay, endOfDay, ACTIVE_STATUS);
+        return showtimeRepository.findByShowDateTimeBetweenAndStatus(startOfDay, endOfDay, ShowtimeStatus.ACTIVE.getValue());
     }
 }
