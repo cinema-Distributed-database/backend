@@ -41,7 +41,7 @@ public class BookingService {
         Showtime showtime = showtimeRepository.findById(request.getShowtimeId()) //
                 .orElseThrow(() -> new IllegalArgumentException("Showtime không tồn tại: " + request.getShowtimeId()));
         
-        if (!"active".equalsIgnoreCase(showtime.getStatus())) { //
+        if (!"active".equalsIgnoreCase(showtime.getStatus().toString())) { //
             throw new IllegalArgumentException("Suất chiếu không còn hoạt động.");
         }
         if (showtime.getShowDateTime().isBefore(LocalDateTime.now())) { //

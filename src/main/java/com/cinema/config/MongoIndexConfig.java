@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import com.mongodb.client.model.IndexOptions;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.index.GeospatialIndex;
+// import org.springframework.data.mongodb.core.index.GeospatialIndex;
 import org.springframework.data.mongodb.core.index.Index;
 import org.springframework.data.mongodb.core.index.IndexOperations;
 import org.springframework.data.mongodb.core.index.TextIndexDefinition;
@@ -42,13 +42,6 @@ public class MongoIndexConfig {
  private void createCinemaIndexes() {
         IndexOperations ops = mongoTemplate.indexOps(Cinema.class);
         
-        // XÓA INDEX CŨ TRƯỚC KHI TÁI TẠO
-        try {
-            ops.dropIndex("idx_cinema_location_2dsphere");
-            log.info("Dropped existing index: idx_cinema_location_2dsphere");
-        } catch (Exception e) {
-            log.debug("Index idx_cinema_location_2dsphere not found or already dropped");
-        }
 
         // CÁCH 1: Sử dụng raw MongoDB command (Đảm bảo tạo đúng 2dsphere)
         try {
@@ -60,14 +53,13 @@ public class MongoIndexConfig {
         } catch (Exception e) {
             log.error("Failed to create 2dsphere index using raw command: {}", e.getMessage());
             
-            // CÁCH 2: Fallback - Sử dụng Spring Data MongoDB
-            try {
-                ops.ensureIndex(new GeospatialIndex("location")
-                        .named("idx_cinema_location_2dsphere_fallback"));
-                log.info("Created 2dsphere index using GeospatialIndex: idx_cinema_location_2dsphere_fallback");
-            } catch (Exception ex) {
-                log.error("Failed to create 2dsphere index using GeospatialIndex: {}", ex.getMessage());
-            }
+        //     try {
+        //         ops.ensureIndex(new GeospatialIndex("location")
+        //                 .named("idx_cinema_location_2dsphere_fallback"));
+        //         log.info("Created 2dsphere index using GeospatialIndex: idx_cinema_location_2dsphere_fallback");
+        //     } catch (Exception ex) {
+        //         log.error("Failed to create 2dsphere index using GeospatialIndex: {}", ex.getMessage());
+        //     }
         }
 
         // Index cho lọc rạp theo thành phố và trạng thái, sắp xếp theo tên
