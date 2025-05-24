@@ -5,8 +5,8 @@ import com.cinema.dto.request.CreateBookingRequest; //
 import com.cinema.dto.response.BookingAggregatedDetailsDto;
 import com.cinema.dto.response.BookingDetailsDto; //
 import com.cinema.enums.*;
-import com.cinema.model.*; 
-import com.cinema.repository.*; 
+import com.cinema.model.*;
+import com.cinema.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.types.ObjectId;
@@ -39,13 +39,21 @@ public class BookingService {
 
         Showtime showtime = showtimeRepository.findById(request.getShowtimeId()) //
                 .orElseThrow(() -> new IllegalArgumentException("Showtime không tồn tại: " + request.getShowtimeId()));
-        
+
         if (!ShowtimeStatus.ACTIVE.equals(showtime.getStatus())) { //
             throw new IllegalArgumentException("Suất chiếu không còn hoạt động.");
         }
         if (showtime.getShowDateTime().isBefore(LocalDateTime.now())) { //
             throw new IllegalArgumentException("Suất chiếu đã diễn ra.");
         }
+
+        // --- BEGIN MODIFICATION ---
+        // Bước 1: Giữ ghế trước
+        log.info("Đang tiến hành giữ ghế cho showtimeId: {}, seats: {}, customerPhone: {}", showtime.getId(), request.getSeats(), request.getCustomerInfo().getPhone());
+        // seatService.holdSeats sẽ ném exception nếu không thành công
+        seatService.holdSeats(showtime.getId(), request.getSeats(), request.getCustomerInfo().getPhone());
+        log.info("Đã giữ ghế thành công.");
+        // --- END MODIFICATION ---
 
         Booking booking = new Booking(); //
         booking.setId(new ObjectId().toString()); //
@@ -59,12 +67,10 @@ public class BookingService {
 
         booking.setSeats(request.getSeats()); //
         booking.setBookingTime(LocalDateTime.now()); //
-        
-        // *** UPDATED ***
-        booking.setPaymentStatus(PaymentStatusType.PENDING); 
+
+        booking.setPaymentStatus(PaymentStatusType.PENDING);
         booking.setPaymentMethod(null); // Sẽ được set sau khi thanh toán thành công
-        // *** END UPDATED ***
-        
+
         booking.setCreatedAt(LocalDateTime.now()); //
         booking.setUpdatedAt(LocalDateTime.now()); //
         booking.setConfirmationCode(generateConfirmationCode()); //
@@ -82,10 +88,9 @@ public class BookingService {
             booking.setTicketTypes(ticketTypes); //
             totalTicketPrice = ticketTypes.stream().mapToLong(Booking.TicketType::getSubtotal).sum(); //
         }
-        
+
         long totalConcessionPrice = 0; //
         if (request.getConcessions() != null && !request.getConcessions().isEmpty()) { //
-            // *** UPDATED ***
             List<Booking.ConcessionItem> bookingConcessions = request.getConcessions().stream().map(cReq -> {
                 Concession concessionModel = concessionRepository.findById(cReq.getItemId()) //
                         .orElseThrow(() -> new IllegalArgumentException("Concession không tồn tại: " + cReq.getItemId()));
@@ -103,32 +108,34 @@ public class BookingService {
                 bookingConcession.setPrice(concessionModel.getPrice()); //
                 return bookingConcession;
             }).collect(Collectors.toList());
-            // *** END UPDATED ***
             booking.setConcessions(bookingConcessions); //
             totalConcessionPrice = bookingConcessions.stream().mapToLong(bc -> bc.getPrice() * bc.getQuantity()).sum(); //
         }
 
         booking.setTotalPrice(totalTicketPrice + totalConcessionPrice); //
+
+        // Bước 2: Lưu booking sau khi đã giữ ghế thành công
         Booking savedBooking = bookingRepository.save(booking); //
-        log.info("Đã tạo booking thành công với ID: {} và mã xác nhận: {}", savedBooking.getId(), savedBooking.getConfirmationCode()); //
+        log.info("Đã tạo booking (chờ thanh toán) thành công với ID: {} và mã xác nhận: {}", savedBooking.getId(), savedBooking.getConfirmationCode()); //
 
-// Kiểm tra và giữ ghế trước khi tạo booking
-boolean seatsHeld = seatService.holdSeats(showtime.getId(), request.getSeats(), request.getCustomerInfo().getPhone());
-if (!seatsHeld) {
-    throw new IllegalStateException("Không thể giữ ghế đã chọn. Ghế có thể đã được đặt hoặc đang được giữ bởi người khác.");
-}
+        // --- BEGIN MODIFICATION ---
+        // Xóa bỏ việc gọi confirmSeatBooking và các log/comment không cần thiết ở đây
+        // boolean seatsHeld = seatService.holdSeats(...); // ĐÃ DI CHUYỂN LÊN TRÊN
+        // if (!seatsHeld) { ... }
 
-        log.info("Đã tạo booking thành công với ID: {} và mã xác nhận: {}", savedBooking.getId(), savedBooking.getConfirmationCode());
+        // log.info("Đã tạo booking thành công với ID: {} và mã xác nhận: {}", savedBooking.getId(), savedBooking.getConfirmationCode()); // Xóa log trùng lặp
 
-        boolean seatsConfirmed = seatService.confirmSeatBooking(showtime.getId(), request.getSeats(), savedBooking.getId());
-        if (!seatsConfirmed) {
-            log.error("Không thể xác nhận ghế cho booking {}. Rolling back.", savedBooking.getId());
-            // Rollback: release seats và delete booking
-            seatService.releaseSeats(showtime.getId(), request.getSeats());
-            bookingRepository.delete(savedBooking);
-            throw new IllegalStateException("Lỗi hệ thống: Không thể xác nhận ghế đã chọn. Vui lòng thử lại.");
-        }
-        log.info("Đã xác nhận ghế cho booking: {}", savedBooking.getId()); //
+        // boolean seatsConfirmed = seatService.confirmSeatBooking(showtime.getId(), request.getSeats(), savedBooking.getId()); // SẼ ĐƯỢC GỌI SAU KHI THANH TOÁN
+        // if (!seatsConfirmed) {
+        //     log.error("Không thể xác nhận ghế cho booking {}. Rolling back.", savedBooking.getId());
+        //     // Rollback: release seats và delete booking
+        //     seatService.releaseSeats(showtime.getId(), request.getSeats()); // Nếu giữ ghế thất bại ở trên, giao dịch sẽ rollback
+        //     bookingRepository.delete(savedBooking);
+        //     throw new IllegalStateException("Lỗi hệ thống: Không thể xác nhận ghế đã chọn. Vui lòng thử lại.");
+        // }
+        // log.info("Đã xác nhận ghế cho booking: {}", savedBooking.getId()); //
+        // --- END MODIFICATION ---
+
         return getBookingDetailsDto(savedBooking); //
     }
 
@@ -142,25 +149,38 @@ if (!seatsHeld) {
             log.warn("Booking {} đã được xác nhận thanh toán trước đó.", bookingId); //
             return getBookingDetailsDto(booking); //
         }
-        
-        // *** UPDATED ***
-        booking.setPaymentStatus(PaymentStatusType.COMPLETED); 
-        booking.setPaymentMethod(paymentMethod); 
-        // *** END UPDATED ***
+
+        booking.setPaymentStatus(PaymentStatusType.COMPLETED);
+        booking.setPaymentMethod(paymentMethod);
         booking.setPaymentReference(paymentTransactionId); //
         booking.setUpdatedAt(LocalDateTime.now()); //
 
         Booking updatedBooking = bookingRepository.save(booking); //
         log.info("Đã xác nhận thanh toán thành công cho booking: {}", updatedBooking.getId()); //
+
+        // --- BEGIN MODIFICATION ---
+        // Bước 3: Xác nhận ghế (chuyển từ HOLDING sang BOOKED) sau khi thanh toán thành công
+        try {
+            log.info("Đang tiến hành xác nhận (BOOKED) các ghế cho bookingId: {}", updatedBooking.getId());
+            seatService.confirmSeatBooking(updatedBooking.getShowtimeId(), updatedBooking.getSeats(), updatedBooking.getId());
+            log.info("Đã xác nhận (BOOKED) ghế thành công cho bookingId: {}", updatedBooking.getId());
+        } catch (Exception e) {
+            // Xử lý tình huống nghiêm trọng: Thanh toán đã thành công nhưng không thể xác nhận ghế.
+            // Điều này không nên xảy ra nếu ghế đã được HELD đúng cách.
+            // Cần có cơ chế cảnh báo cho admin hoặc xử lý thủ công.
+            log.error("LỖI NGHIÊM TRỌNG: Thanh toán booking {} thành công nhưng không thể xác nhận ghế. Cần kiểm tra thủ công! Lỗi: {}", updatedBooking.getId(), e.getMessage(), e);
+            // Không ném exception ra ngoài ở đây để tránh làm client hiểu lầm là thanh toán thất bại.
+            // Trạng thái booking vẫn là COMPLETED.
+        }
+        // --- END MODIFICATION ---
+
         return getBookingDetailsDto(updatedBooking); //
     }
-    
+
     public Optional<BookingAggregatedDetailsDto> getBookingDetailsByConfirmationCode(String confirmationCode) {
         log.debug("Tra cứu booking chi tiết bằng mã xác nhận: {}", confirmationCode);
-        // Tìm booking gốc trước
         Optional<Booking> bookingOpt = bookingRepository.findByConfirmationCode(confirmationCode);
         if (bookingOpt.isPresent()) {
-            // Sau đó dùng ID của booking gốc để lấy thông tin đã aggregate
             return bookingRepository.findBookingWithDetailsById(bookingOpt.get().getId());
         }
         return Optional.empty();
@@ -174,7 +194,7 @@ if (!seatsHeld) {
         }
         return Optional.empty();
     }
-    
+
     private String generateConfirmationCode() { //
         String prefix = appProperties.getBooking().getConfirmationCode().getPrefix(); //
         String randomPart = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(); //

@@ -50,6 +50,8 @@ public class SystemUtilityService {
      */
     public List<String> getAllMovieGenres() {
         log.debug("Lấy danh sách thể loại phim");
-        return movieRepository.findDistinctGenres(); //
+        return movieRepository.findDistinctGenres().stream()
+                .map(MovieRepository.GenreProjection::getGenre)
+                .toList(); //
     }
 }
