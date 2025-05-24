@@ -2,6 +2,10 @@ package com.cinema.model;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+
+import com.cinema.enums.SeatState;
+import com.cinema.enums.ShowtimeStatus;
+
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -29,8 +33,10 @@ public class Showtime {
     private PricingTiers pricingTiers;
     private Integer totalSeats;
     private Integer availableSeats;
-    private String status;
+    private ShowtimeStatus status;
     private Map<String, SeatStatus> seatStatus;
+
+    private boolean hasHoldingSeats; // Trường mới
     
     @Data
     @NoArgsConstructor
@@ -45,7 +51,7 @@ public class Showtime {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class SeatStatus {
-        private String status; // available, holding, booked, unavailable
+        private SeatState status;// available, holding, booked, unavailable
         private LocalDateTime holdStartedAt;
         private String bookingId;
     }

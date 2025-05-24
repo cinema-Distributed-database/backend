@@ -3,6 +3,7 @@ package com.cinema.controller;
 import com.cinema.dto.ApiResponse;
 import com.cinema.dto.request.CreateBookingRequest;
 import com.cinema.dto.request.LookupBookingRequest;
+import com.cinema.dto.response.BookingAggregatedDetailsDto;
 import com.cinema.dto.response.BookingDetailsDto;
 import com.cinema.service.BookingService;
 import jakarta.validation.Valid;
@@ -42,9 +43,9 @@ public class BookingController {
      * GET /api/bookings/{confirmationCode} - Tra cứu vé bằng mã xác nhận
      */
     @GetMapping("/{confirmationCode}")
-    public ResponseEntity<ApiResponse<BookingDetailsDto>> getBookingByConfirmationCode(@PathVariable String confirmationCode) {
-        log.info("Request tra cứu booking bằng mã xác nhận: {}", confirmationCode);
-        return bookingService.getBookingByConfirmationCode(confirmationCode)
+    public ResponseEntity<ApiResponse<BookingAggregatedDetailsDto>> getBookingDetailsByConfirmationCode(@PathVariable String confirmationCode) {
+        log.info("Request tra cứu booking chi tiết bằng mã xác nhận: {}", confirmationCode);
+        return bookingService.getBookingDetailsByConfirmationCode(confirmationCode) // Gọi phương thức service mới
                 .map(bookingDetails -> ResponseEntity.ok(ApiResponse.success(bookingDetails)))
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -53,10 +54,10 @@ public class BookingController {
      * GET /api/bookings/lookup - Tra cứu vé (confirmationCode + phone)
      * Sử dụng POST để gửi body hoặc GET với RequestParams
      */
-    @PostMapping("/lookup") // Hoặc @GetMapping với @RequestParam
-    public ResponseEntity<ApiResponse<BookingDetailsDto>> lookupBooking(@Valid @RequestBody LookupBookingRequest request) {
-         log.info("Request tra cứu booking với mã: {} và SĐT: {}", request.getConfirmationCode(), request.getPhone());
-        return bookingService.lookupBooking(request.getConfirmationCode(), request.getPhone())
+    @PostMapping("/lookup")
+    public ResponseEntity<ApiResponse<BookingAggregatedDetailsDto>> lookupBookingDetails(@Valid @RequestBody LookupBookingRequest request) {
+         log.info("Request tra cứu booking chi tiết với mã: {} và SĐT: {}", request.getConfirmationCode(), request.getPhone());
+        return bookingService.lookupBookingDetails(request.getConfirmationCode(), request.getPhone()) // Gọi phương thức service mới
                 .map(bookingDetails -> ResponseEntity.ok(ApiResponse.success(bookingDetails)))
                 .orElse(ResponseEntity.notFound().build());
     }

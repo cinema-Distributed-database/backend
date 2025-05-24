@@ -2,6 +2,7 @@ package com.cinema.service;
 
 import com.cinema.config.AppProperties; //
 import com.cinema.dto.request.CreateBookingRequest; //
+import com.cinema.dto.response.BookingAggregatedDetailsDto;
 import com.cinema.dto.response.BookingDetailsDto; //
 import com.cinema.enums.PaymentMethodType; // Import
 import com.cinema.enums.PaymentStatusType; // Import
@@ -146,16 +147,24 @@ public class BookingService {
         return getBookingDetailsDto(updatedBooking); //
     }
     
-    public Optional<BookingDetailsDto> getBookingByConfirmationCode(String confirmationCode) { //
-        log.debug("Tra cứu booking bằng mã xác nhận: {}", confirmationCode); //
-        return bookingRepository.findByConfirmationCode(confirmationCode) //
-                                .map(this::getBookingDetailsDto);
+    public Optional<BookingAggregatedDetailsDto> getBookingDetailsByConfirmationCode(String confirmationCode) {
+        log.debug("Tra cứu booking chi tiết bằng mã xác nhận: {}", confirmationCode);
+        // Tìm booking gốc trước
+        Optional<Booking> bookingOpt = bookingRepository.findByConfirmationCode(confirmationCode);
+        if (bookingOpt.isPresent()) {
+            // Sau đó dùng ID của booking gốc để lấy thông tin đã aggregate
+            return bookingRepository.findBookingWithDetailsById(bookingOpt.get().getId());
+        }
+        return Optional.empty();
     }
 
-    public Optional<BookingDetailsDto> lookupBooking(String confirmationCode, String phone) { //
-        log.debug("Tra cứu booking bằng mã xác nhận: {} và SĐT: {}", confirmationCode, phone); //
-        return bookingRepository.findByConfirmationCodeAndCustomerInfo_Phone(confirmationCode, phone) //
-                                .map(this::getBookingDetailsDto);
+    public Optional<BookingAggregatedDetailsDto> lookupBookingDetails(String confirmationCode, String phone) {
+        log.debug("Tra cứu booking chi tiết bằng mã xác nhận: {} và SĐT: {}", confirmationCode, phone);
+        Optional<Booking> bookingOpt = bookingRepository.findByConfirmationCodeAndCustomerInfo_Phone(confirmationCode, phone);
+        if (bookingOpt.isPresent()) {
+            return bookingRepository.findBookingWithDetailsById(bookingOpt.get().getId());
+        }
+        return Optional.empty();
     }
     
     private String generateConfirmationCode() { //
@@ -165,25 +174,25 @@ public class BookingService {
     }
 
     private BookingDetailsDto getBookingDetailsDto(Booking booking) { //
-        Showtime showtime = showtimeRepository.findById(booking.getShowtimeId()).orElse(null); //
-        Movie movie = null; //
-        Cinema cinema = null; //
-        Room room = null; //
-        LocalDateTime showDateTime = null; //
+        Showtime showtime = showtimeRepository.findById(booking.getShowtimeId()).orElse(null);
+        Movie movie = null;
+        Cinema cinema = null;
+        Room room = null;
+        LocalDateTime showDateTime = null;
 
-        if (showtime != null) { //
-            movie = movieRepository.findById(showtime.getMovieId()).orElse(null); //
-            cinema = cinemaRepository.findById(showtime.getCinemaId()).orElse(null); //
-            room = roomRepository.findById(showtime.getRoomId()).orElse(null); //
-            showDateTime = showtime.getShowDateTime(); //
+        if (showtime != null) {
+            movie = movieRepository.findById(showtime.getMovieId()).orElse(null);
+            cinema = cinemaRepository.findById(showtime.getCinemaId()).orElse(null);
+            room = roomRepository.findById(showtime.getRoomId()).orElse(null);
+            showDateTime = showtime.getShowDateTime();
         }
 
         return BookingDetailsDto.fromBooking( //
-            booking, //
-            movie != null ? movie.getTitle() : "N/A", //
-            cinema != null ? cinema.getName() : "N/A", //
-            room != null ? room.getName() : "N/A", //
-            showDateTime //
+            booking,
+            movie != null ? movie.getTitle() : "N/A",
+            cinema != null ? cinema.getName() : "N/A",
+            room != null ? room.getName() : "N/A",
+            showDateTime
         );
     }
 }

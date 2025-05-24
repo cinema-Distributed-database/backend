@@ -41,4 +41,6 @@ public interface ShowtimeRepository extends MongoRepository<Showtime, String> {
     
     List<Showtime> findByStatus(String status);
 
+    List<Showtime> findByHasHoldingSeatsTrue();
+
 }

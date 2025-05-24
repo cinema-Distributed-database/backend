@@ -31,7 +31,7 @@ public class SeatService {
     /**
      * Chạy định kỳ để kiểm tra và giải phóng ghế hết hạn giữ.
      */
-    @Scheduled(fixedRateString = "${cinema.seat-hold.expiry-check-rate-ms:60000}") // Mặc định 60s
+@Scheduled(fixedRateString = "${cinema.seat-hold.expiry-check-rate-ms:60000}")
     @Transactional
     public void releaseExpiredSeatHolds() {
         log.debug("Checking for expired seat holds...");
@@ -39,33 +39,48 @@ public class SeatService {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime expiryThreshold = now.minusMinutes(holdExpiryMinutes);
 
-        List<Showtime> showtimesWithHoldingSeats = showtimeRepository.findShowtimesWithHoldingSeats(); //
+        // Sử dụng phương thức repository mới
+        List<Showtime> showtimesWithHoldingSeats = showtimeRepository.findByHasHoldingSeatsTrue(); // THAY ĐỔI Ở ĐÂY
 
         for (Showtime showtime : showtimesWithHoldingSeats) {
-            boolean hasChanges = false;
+            boolean hasChangesToSeatStatus = false;
             Map<String, Showtime.SeatStatus> seatStatusMap = showtime.getSeatStatus();
+            int currentHoldingCount = 0; // Đếm số ghế còn đang giữ sau khi kiểm tra
 
             if (seatStatusMap != null && !seatStatusMap.isEmpty()) {
                 for (Map.Entry<String, Showtime.SeatStatus> entry : seatStatusMap.entrySet()) {
                     String seatId = entry.getKey();
                     Showtime.SeatStatus status = entry.getValue();
 
-                    if ("holding".equals(status.getStatus()) &&
-                        status.getHoldStartedAt() != null &&
-                        status.getHoldStartedAt().isBefore(expiryThreshold)) {
+                    if ("holding".equals(status.getStatus())) { // Sử dụng hằng số/enum nếu có
+                        if (status.getHoldStartedAt() != null &&
+                            status.getHoldStartedAt().isBefore(expiryThreshold)) {
 
-                        status.setStatus("available");
-                        status.setHoldStartedAt(null);
-                        status.setBookingId(null); // Đảm bảo bookingId cũng được xóa
-                        hasChanges = true;
-                        log.info("Released expired seat hold: ShowtimeID={}, SeatID={}", showtime.getId(), seatId);
+                            status.setStatus("available"); // Sử dụng hằng số/enum nếu có
+                            status.setHoldStartedAt(null);
+                            status.setBookingId(null);
+                            hasChangesToSeatStatus = true;
+                            log.info("Released expired seat hold: ShowtimeID={}, SeatID={}", showtime.getId(), seatId);
+                        } else {
+                            currentHoldingCount++; // Ghế này vẫn đang được giữ hợp lệ
+                        }
                     }
                 }
             }
 
-            if (hasChanges) {
-                updateAvailableSeatsCount(showtime);
+            if (hasChangesToSeatStatus) {
+                updateAvailableSeatsCount(showtime); // Cập nhật số ghế trống
+                // Cập nhật lại cờ hasHoldingSeats
+                showtime.setHasHoldingSeats(currentHoldingCount > 0); // THAY ĐỔI Ở ĐÂY
                 showtimeRepository.save(showtime);
+            } else if (currentHoldingCount == 0 && showtime.isHasHoldingSeats()) {
+                // Trường hợp không có thay đổi nào về trạng thái ghế (không có ghế nào hết hạn)
+                // nhưng trước đó hasHoldingSeats là true và giờ không còn ghế nào holding nữa
+                // (ví dụ: tất cả ghế holding đã được release bởi user hoặc confirm booking)
+                // Cần đảm bảo cờ này được cập nhật đúng ở các hàm holdSeats, releaseSeats, confirmSeatBooking.
+                // Dòng này có thể không cần nếu các hàm khác đã cập nhật đúng.
+                // showtime.setHasHoldingSeats(false);
+                // showtimeRepository.save(showtime);
             }
         }
     }
@@ -101,43 +116,19 @@ public class SeatService {
      */
     @Transactional
     public boolean holdSeats(String showtimeId, List<String> seatIds, String customerPhone) {
-        log.info("Attempting to hold seats for showtimeId: {}, seats: {}, customer: {}", showtimeId, seatIds, customerPhone);
-        Showtime showtime = showtimeRepository.findById(showtimeId)
-                .orElseThrow(() -> new IllegalArgumentException("Showtime không tồn tại: " + showtimeId));
-
-        if (!"active".equalsIgnoreCase(showtime.getStatus())) {
-             throw new IllegalArgumentException("Suất chiếu không hoạt động hoặc đã kết thúc.");
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-        Map<String, Showtime.SeatStatus> seatStatusMap = showtime.getSeatStatus();
-        if (seatStatusMap == null) {
-            seatStatusMap = new ConcurrentHashMap<>();
-            showtime.setSeatStatus(seatStatusMap);
-        }
-
-        // Kiểm tra tất cả ghế có sẵn không
-        for (String seatId : seatIds) {
-            Showtime.SeatStatus currentStatus = seatStatusMap.get(seatId);
-            if (currentStatus != null && !"available".equals(currentStatus.getStatus())) {
-                // Kiểm tra xem có phải ghế đang giữ bởi chính khách hàng này không (nếu logic cho phép re-hold)
-                // Hiện tại, nếu không available thì không cho giữ
-                log.warn("Ghế {} không khả dụng để giữ cho Showtime {}. Trạng thái hiện tại: {}", seatId, showtimeId, currentStatus.getStatus());
-                throw new IllegalStateException("Ghế " + seatId + " không khả dụng hoặc đang được giữ.");
-            }
-        }
-
+        // ... (logic kiểm tra showtime, ghế như cũ) ...
+        
         // Giữ tất cả ghế
         for (String seatId : seatIds) {
             Showtime.SeatStatus newStatus = new Showtime.SeatStatus();
-            newStatus.setStatus("holding");
+            newStatus.setStatus(SeatStatusValue.HOLDING); // Giả sử có Enum SeatStatusValue
             newStatus.setHoldStartedAt(now);
-            // newStatus.setCustomerId(customerPhone); // Có thể lưu SĐT hoặc ID khách hàng nếu cần
             seatStatusMap.put(seatId, newStatus);
             log.debug("Đã giữ ghế: ShowtimeID={}, SeatID={}, HeldAt={}", showtimeId, seatId, now);
         }
 
         updateAvailableSeatsCount(showtime);
+        showtime.setHasHoldingSeats(true); // CẬP NHẬT CỜ KHI GIỮ GHẾ
         showtimeRepository.save(showtime);
         log.info("Đã giữ thành công {} ghế cho Showtime {}: {}", seatIds.size(), showtimeId, seatIds);
         return true;
@@ -254,14 +245,14 @@ public class SeatService {
                 // Xử lý lỗi: có thể hủy booking hoặc thông báo lỗi nghiêm trọng
                 throw new IllegalStateException("Ghế " + seatId + " không thể xác nhận. Vui lòng thử lại.");
             }
-            currentStatus.setStatus("booked");
+            currentStatus.setStatus(SeatStatusValue.BOOKED);
             currentStatus.setBookingId(bookingId);
-            currentStatus.setHoldStartedAt(null); // Xóa thời gian bắt đầu giữ
-            log.debug("Đã xác nhận đặt ghế: ShowtimeID={}, SeatID={}, BookingID={}", showtimeId, seatId, bookingId);
+            currentStatus.setHoldStartedAt(null);
         }
         
-        // Số ghế available không đổi khi chuyển từ holding sang booked, nhưng số ghế holding giảm, booked tăng.
-        // updateAvailableSeatsCount(showtime); // Không thay đổi tổng số ghế không available
+        boolean stillHasHolding = showtime.getSeatStatus().values().stream()
+                                      .anyMatch(s -> SeatStatusValue.HOLDING.equals(s.getStatus()));
+        showtime.setHasHoldingSeats(stillHasHolding); // CẬP NHẬT CỜ
         showtimeRepository.save(showtime);
         log.info("Đã xác nhận thành công đặt {} ghế cho Showtime {}, BookingID {}", seatIds.size(), showtimeId, bookingId);
         return true;

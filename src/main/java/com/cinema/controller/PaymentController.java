@@ -78,35 +78,51 @@ public class PaymentController {
     public RedirectView vnpayReturn(@RequestParam Map<String, String> vnpParams) {
         log.info("VNPay return URL. Params: {}", vnpParams);
         String redirectUrlStr;
+        String bookingIdForRedirect = "unknown_booking"; // Giá trị mặc định nếu không lấy được bookingId
+
         try {
             Payment paymentResult = vnPayService.processVnpayReturn(vnpParams);
-            // Xây dựng URL redirect về frontend với các tham số cần thiết
+            bookingIdForRedirect = paymentResult.getBookingId(); // Lấy bookingId từ paymentResult
+
             String status = paymentResult.getStatus().name().toLowerCase();
-            String bookingId = paymentResult.getBookingId();
             String paymentId = paymentResult.getId();
-            String transactionId = paymentResult.getTransactionId(); 
+            String transactionId = paymentResult.getTransactionId();
             String responseCode = paymentResult.getResponseCode();
-            String message = "Giao dịch " + status; // Thông báo chung
+            String message;
 
             if (paymentResult.getStatus() == PaymentStatusType.COMPLETED) {
                  message = "Thanh toán thành công!";
                  redirectUrlStr = String.format("%s?bookingId=%s&paymentId=%s&status=%s&transactionId=%s&code=%s&message=%s",
-                                               frontendSuccessUrl, bookingId, paymentId, status, transactionId, responseCode, URLEncoder.encode(message, StandardCharsets.UTF_8));
+                                               frontendSuccessUrl, bookingIdForRedirect, paymentId, status, transactionId, responseCode, URLEncoder.encode(message, StandardCharsets.UTF_8));
             } else {
-                 message = "Thanh toán thất bại. Mã lỗi VNPay: " + responseCode;
+                 message = "Thanh toán thất bại. Mã lỗi VNPay: " + responseCode + ". Vui lòng liên hệ hỗ trợ nếu cần.";
+                 if (paymentResult.getStatus() == PaymentStatusType.FAILED && "97".equals(responseCode)){
+                     message = "Chữ ký không hợp lệ từ VNPay hoặc thông tin giao dịch không đúng. Vui lòng thử lại hoặc liên hệ hỗ trợ.";
+                 }
                  redirectUrlStr = String.format("%s?bookingId=%s&paymentId=%s&status=%s&transactionId=%s&code=%s&message=%s",
-                                               frontendFailureUrl, bookingId, paymentId, status, transactionId, responseCode, URLEncoder.encode(message, StandardCharsets.UTF_8));
+                                               frontendFailureUrl, bookingIdForRedirect, paymentId, status, transactionId, responseCode, URLEncoder.encode(message, StandardCharsets.UTF_8));
             }
         } catch (IllegalArgumentException e) {
-            log.warn("Lỗi xử lý VNPay return (tham số không hợp lệ): {}", e.getMessage());
-            String bookingIdAttempt = vnpParams.getOrDefault("vnp_TxnRef", "unknown").split("_")[0]; // Cố gắng lấy bookingId từ vnp_TxnRef
-            redirectUrlStr = String.format("%s?bookingId=%s&error=%s&code=97", 
-                                           frontendFailureUrl, bookingIdAttempt, URLEncoder.encode(e.getMessage(), StandardCharsets.UTF_8));
+            log.warn("Lỗi xử lý VNPay return (tham số không hợp lệ hoặc giao dịch không tìm thấy): {}", e.getMessage());
+            // Cố gắng lấy bookingId từ params nếu có, nhưng không phải là cách tin cậy
+            String rawTxnRef = vnpParams.get("vnp_TxnRef");
+            if (rawTxnRef != null && rawTxnRef.contains("_")) { // Kiểm tra lại logic parse này
+                 // Nếu bạn chắc chắn rằng bookingId có thể được trích xuất một cách an toàn từ TxnRef
+                 // (ví dụ, nếu paymentId được tạo dựa trên bookingId) thì có thể dùng.
+                 // Tuy nhiên, tốt nhất là nên có payment record để lấy bookingId.
+                 // Trong trường hợp này, processVnpayReturn nên throw lỗi nếu không tìm thấy payment
+                 // và không nên cố gắng lấy bookingId từ vnp_TxnRef ở controller.
+            }
+            // bookingIdForRedirect có thể vẫn là "unknown_booking" nếu không tìm thấy Payment record
+            // hoặc nếu logic lấy bookingId từ vnpParams không thành công/không an toàn.
+            // Thường thì nếu processVnpayReturn throw exception, chúng ta không có paymentResult.
+            // Nên redirect về trang lỗi chung hơn.
+            redirectUrlStr = String.format("%s?error=%s&code=CLIENT_ERROR", // Sử dụng bookingIdForRedirect nếu có
+                                           frontendFailureUrl, URLEncoder.encode(e.getMessage(), StandardCharsets.UTF_8));
         } catch (Exception e) {
             log.error("Lỗi không mong muốn khi xử lý VNPay return: ", e);
-             String bookingIdAttempt = vnpParams.getOrDefault("vnp_TxnRef", "unknown").split("_")[0];
-            redirectUrlStr = String.format("%s?bookingId=%s&error=%s&code=99", 
-                                           frontendFailureUrl, bookingIdAttempt, URLEncoder.encode("Lỗi hệ thống, vui lòng thử lại.", StandardCharsets.UTF_8));
+            redirectUrlStr = String.format("%s?error=%s&code=SYSTEM_ERROR",
+                                           frontendFailureUrl, URLEncoder.encode("Lỗi hệ thống, vui lòng thử lại hoặc liên hệ hỗ trợ.", StandardCharsets.UTF_8));
         }
         log.info("Redirecting client to: {}", redirectUrlStr);
         return new RedirectView(redirectUrlStr);

@@ -214,6 +214,11 @@ public class MongoIndexConfig {
                 .on("showDateTime", Sort.Direction.ASC)
                 .named("idx_showtime_status_datetime"));
         log.info("Created index: idx_showtime_status_datetime on showtimes");
+
+        ops.ensureIndex(new Index()
+                .on("hasHoldingSeats", Sort.Direction.ASC)
+                .named("idx_showtime_hasHoldingSeats"));
+        log.info("Created index: idx_showtime_hasHoldingSeats on showtimes");
         
         log.info("Showtime indexes ensured.");
     }
