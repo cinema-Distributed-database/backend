@@ -24,16 +24,16 @@ public class ShowtimeService {
     /**
      * Lấy danh sách suất chiếu có filter.
      */
-    public List<Showtime> getShowtimes(String movieId, String cinemaId, LocalDate date, ShowtimeStatus status) {
+    public List<Showtime> getShowtimes(String movieId, String cinemaId, LocalDate date, String status) {
+        // FIX: Thay đổi parameter từ ShowtimeStatus sang String để match với Controller
         LocalDateTime startOfDay = date != null ? date.atStartOfDay() : null;
         LocalDateTime endOfDay = date != null ? date.atTime(LocalTime.MAX) : null;
         
-        // Mặc định là ACTIVE nếu không có status
-        ShowtimeStatus queryStatus = (status != null) ? status : ShowtimeStatus.ACTIVE;
-        String finalStatusValue = queryStatus.getValue();
+        // Mặc định là "active" nếu không có status
+        String finalStatusValue = (status != null) ? status : ShowtimeStatus.ACTIVE.getValue();
 
         log.debug("Fetching showtimes with movieId: {}, cinemaId: {}, date: {}, status: {}",
-                  movieId, cinemaId, date, queryStatus);
+                  movieId, cinemaId, date, finalStatusValue);
 
         if (movieId != null && cinemaId != null && date != null) {
             return showtimeRepository.findByMovieIdAndCinemaIdAndShowDateTimeBetweenAndStatus(
