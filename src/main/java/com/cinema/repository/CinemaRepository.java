@@ -4,6 +4,7 @@ import com.cinema.model.Cinema;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.geo.Circle;
+import org.springframework.data.mongodb.repository.Aggregation;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -22,8 +23,12 @@ public interface CinemaRepository extends MongoRepository<Cinema, String> {
     @Query("{ 'location': { $near: { $geometry: { type: 'Point', coordinates: [?1, ?0] }, $maxDistance: ?2 } }, 'status': 'active' }")
     List<Cinema> findNearbyActive(double latitude, double longitude, double maxDistanceMeters);
     
-// Trong CinemaRepository.java
-    @Query("db.cinemas.distinct('city', { 'status': ?0 })")
+    @Aggregation(pipeline = {
+        "{ $match: { 'status': ?0 } }",  
+        "{ $group: { '_id': '$city' } }",    
+        "{ $project: { 'city': '$_id', '_id': 0 } }", 
+        "{ $sort: { 'city': 1 } }"         
+    })
     List<String> findDistinctCitiesByStatus(String status);
     
     List<Cinema> findByCityContainingIgnoreCaseAndStatus(String city, String status);
@@ -32,4 +37,8 @@ public interface CinemaRepository extends MongoRepository<Cinema, String> {
     
     @Query("{ 'status': 'active', 'roomCount': { $exists: true } }")
     List<Cinema> findActiveWithRoomCount();
+
+    interface CityOnly {
+        String getCity();
+    }
 }

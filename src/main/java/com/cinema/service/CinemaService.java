@@ -111,17 +111,4 @@ public class CinemaService {
         
         return mongoTemplate.find(query, Cinema.class);
     }
-    
-    /**
-     * Lấy rạp có nhiều phòng chiếu nhất
-     */
-    public List<Cinema> getTopCinemasByRoomCount(int limit) {
-        Query query = new Query(Criteria.where("status").is("active"));
-        query.limit(limit);
-        // Sắp xếp theo số phòng giảm dần
-        query.with(org.springframework.data.domain.Sort.by(
-                org.springframework.data.domain.Sort.Direction.DESC, "roomCount"));
-        
-        return mongoTemplate.find(query, Cinema.class);
-    }
 }

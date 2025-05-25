@@ -106,15 +106,4 @@ public class CinemaController {
         List<String> cities = cinemaService.getCitiesWithCinemas();
         return ResponseEntity.ok(ApiResponse.success(cities));
     }
-    
-    /**
-     * GET /api/cinemas/top - Rạp có nhiều phòng chiếu nhất
-     */
-    @GetMapping("/top")
-    public ResponseEntity<ApiResponse<List<Cinema>>> getTopCinemas(
-            @RequestParam(defaultValue = "10") int limit) {
-        
-        List<Cinema> cinemas = cinemaService.getTopCinemasByRoomCount(limit);
-        return ResponseEntity.ok(ApiResponse.success(cinemas));
-    }
 }
