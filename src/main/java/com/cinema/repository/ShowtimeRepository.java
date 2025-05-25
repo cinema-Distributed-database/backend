@@ -1,6 +1,7 @@
 package com.cinema.repository;
 
 import com.cinema.model.Showtime;
+import com.cinema.enums.ShowtimeStatus;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -13,34 +14,33 @@ import java.util.Optional;
 public interface ShowtimeRepository extends MongoRepository<Showtime, String> {
 
     @Query("{ 'seatStatus': { $exists: true }, 'seatStatus': { $ne: {} } }")
-    List<Showtime> findShowtimesWithHoldingSeats(); // Đã có
+    List<Showtime> findShowtimesWithHoldingSeats();
 
-    List<Showtime> findByShowDateTimeBetween(LocalDateTime start, LocalDateTime end); // Đã có
+    List<Showtime> findByShowDateTimeBetween(LocalDateTime start, LocalDateTime end);
 
     List<Showtime> findByCinemaIdAndShowDateTimeBetween(
-            String cinemaId, LocalDateTime start, LocalDateTime end); // Đã có
+            String cinemaId, LocalDateTime start, LocalDateTime end);
 
-    // Mới: Lấy suất chiếu theo phim ID, rạp ID, và một khoảng thời gian (ví dụ: trong một ngày)
+    // Thay đổi từ String sang ShowtimeStatus
     List<Showtime> findByMovieIdAndCinemaIdAndShowDateTimeBetweenAndStatus(
-            String movieId, String cinemaId, LocalDateTime startDateTime, LocalDateTime endDateTime, String status);
+            String movieId, String cinemaId, LocalDateTime startDateTime, LocalDateTime endDateTime, ShowtimeStatus status);
 
     List<Showtime> findByMovieIdAndShowDateTimeBetweenAndStatus(
-            String movieId, LocalDateTime startDateTime, LocalDateTime endDateTime, String status);
+            String movieId, LocalDateTime startDateTime, LocalDateTime endDateTime, ShowtimeStatus status);
             
     List<Showtime> findByCinemaIdAndShowDateTimeBetweenAndStatus(
-            String cinemaId, LocalDateTime startDateTime, LocalDateTime endDateTime, String status);
+            String cinemaId, LocalDateTime startDateTime, LocalDateTime endDateTime, ShowtimeStatus status);
 
     List<Showtime> findByShowDateTimeBetweenAndStatus(
-            LocalDateTime startDateTime, LocalDateTime endDateTime, String status);
+            LocalDateTime startDateTime, LocalDateTime endDateTime, ShowtimeStatus status);
             
-    List<Showtime> findByMovieIdAndStatus(String movieId, String status);
+    List<Showtime> findByMovieIdAndStatus(String movieId, ShowtimeStatus status);
     
-    List<Showtime> findByCinemaIdAndStatus(String cinemaId, String status);
+    List<Showtime> findByCinemaIdAndStatus(String cinemaId, ShowtimeStatus status);
 
-    Optional<Showtime> findByIdAndStatus(String id, String status);
+    Optional<Showtime> findByIdAndStatus(String id, ShowtimeStatus status);
     
-    List<Showtime> findByStatus(String status);
+    List<Showtime> findByStatus(ShowtimeStatus status);
 
     List<Showtime> findByHasHoldingSeatsTrue();
-
 }
