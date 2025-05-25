@@ -9,9 +9,9 @@ import jakarta.validation.constraints.NotEmpty;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LookupBookingRequest {
-    @NotEmpty(message = "Mã xác nhận không được để trống")
-    private String confirmationCode;
-
     @NotEmpty(message = "Số điện thoại không được để trống")
     private String phone;
+
+    // @NotEmpty(message = "Email không được để trống")
+    private String email;
 }

@@ -36,13 +36,6 @@ public class BookingAggregatedDetailsDto {
     private String confirmationCode;
     private LocalDateTime createdAt;
 
-    // Thông tin bổ sung từ các document được join (nếu cần)
-    // Ví dụ: movie có thể có poster, cinema có thể có address
-    private Movie movieDetails; // Toàn bộ object Movie nếu cần
-    private Cinema cinemaDetails; // Toàn bộ object Cinema nếu cần
-    private Room roomDetails; // Toàn bộ object Room nếu cần
-    private Showtime showtimeDetails; // Toàn bộ object Showtime nếu cần
-
     // Constructor hoặc factory method để chuyển đổi từ Booking và các object đã join
     public static BookingAggregatedDetailsDto fromBookingAndAggregatedData(
             Booking booking, Movie movie, Cinema cinema, Room room, Showtime showtime) {
@@ -70,12 +63,6 @@ public class BookingAggregatedDetailsDto {
         }
         dto.setConfirmationCode(booking.getConfirmationCode());
         dto.setCreatedAt(booking.getCreatedAt());
-
-        // Gán các object đầy đủ nếu cần
-        dto.setMovieDetails(movie);
-        dto.setCinemaDetails(cinema);
-        dto.setRoomDetails(room);
-        dto.setShowtimeDetails(showtime);
 
         return dto;
     }
