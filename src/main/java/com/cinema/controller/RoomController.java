@@ -27,14 +27,4 @@ public class RoomController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    /**
-     * GET /api/rooms/{id}/seat-map - Sơ đồ ghế của phòng
-     */
-    @GetMapping("/{id}/seat-map")
-    public ResponseEntity<ApiResponse<Room.SeatMap>> getRoomSeatMap(@PathVariable String id) {
-        log.info("Request lấy sơ đồ ghế của phòng: {}", id);
-        return roomService.getRoomSeatMap(id) //
-                .map(seatMap -> ResponseEntity.ok(ApiResponse.success(seatMap)))
-                .orElse(ResponseEntity.notFound().build());
-    }
 }

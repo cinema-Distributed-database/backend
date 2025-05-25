@@ -23,13 +23,6 @@ public class RoomService {
         return roomRepository.findById(id);
     }
     
-    /**
-     * Lấy sơ đồ ghế của phòng
-     */
-    public Optional<Room.SeatMap> getRoomSeatMap(String roomId) {
-        return roomRepository.findById(roomId)
-                .map(Room::getSeatMap);
-    }
     
     /**
      * Lấy danh sách phòng theo rạp

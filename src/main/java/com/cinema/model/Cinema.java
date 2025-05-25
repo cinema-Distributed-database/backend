@@ -17,6 +17,7 @@ public class Cinema {
     private String id;
     
     private String name;
+    private String slug;
     private String address;
     private String city;
     private String image;

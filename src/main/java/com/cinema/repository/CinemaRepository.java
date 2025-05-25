@@ -22,6 +22,7 @@ public interface CinemaRepository extends MongoRepository<Cinema, String> {
     @Query("{ 'location': { $near: { $geometry: { type: 'Point', coordinates: [?1, ?0] }, $maxDistance: ?2 } }, 'status': 'active' }")
     List<Cinema> findNearbyActive(double latitude, double longitude, double maxDistanceMeters);
     
+// Trong CinemaRepository.java
     @Query("db.cinemas.distinct('city', { 'status': ?0 })")
     List<String> findDistinctCitiesByStatus(String status);
     
