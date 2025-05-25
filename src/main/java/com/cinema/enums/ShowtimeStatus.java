@@ -1,11 +1,13 @@
 package com.cinema.enums;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonValue;
+
 public enum ShowtimeStatus {
     ACTIVE("active"),
-    INACTIVE("inactive"), // Hoặc các trạng thái khác như CANCELED, FINISHED
-    COMING_SOON("coming-soon"), // Nếu có
+    INACTIVE("inactive"),
+    COMING_SOON("coming-soon"),
     ENDED("ended");
-
 
     private final String value;
 
@@ -13,10 +15,16 @@ public enum ShowtimeStatus {
         this.value = value;
     }
 
+    @JsonValue
     public String getValue() {
         return value;
     }
-     public static ShowtimeStatus fromValue(String value) {
+
+    @JsonCreator
+    public static ShowtimeStatus fromValue(String value) {
+        if (value == null) {
+            return null;
+        }
         for (ShowtimeStatus status : values()) {
             if (status.value.equalsIgnoreCase(value)) {
                 return status;

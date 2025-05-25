@@ -2,6 +2,7 @@ package com.cinema.model;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -42,6 +43,7 @@ public class Room {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class SeatRow {
+        @Field("id")  // ⬅️ THÊM ANNOTATION NÀY
         private String id;
         private List<SeatInfo> seats;
     }
@@ -50,6 +52,7 @@ public class Room {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class SeatInfo {
+        @Field("id")  // ⬅️ THÊM ANNOTATION NÀY
         private String id;
         private String type;
     }

@@ -20,7 +20,27 @@ public class RoomService {
      * Lấy thông tin chi tiết phòng
      */
     public Optional<Room> getRoomById(String id) {
-        return roomRepository.findById(id);
+        Optional<Room> room = roomRepository.findById(id);
+        
+        // Debug log
+        if (room.isPresent()) {
+            Room r = room.get();
+            log.info("Room found: {}", r.getId());
+            
+            if (r.getSeatMap() != null && r.getSeatMap().getRows() != null) {
+                r.getSeatMap().getRows().forEach(row -> {
+                    log.info("Row ID: {}, Seats count: {}", 
+                            row.getId(), row.getSeats().size());
+                    
+                    row.getSeats().forEach(seat -> {
+                        log.info("Seat ID: {}, Type: {}", 
+                                seat.getId(), seat.getType());
+                    });
+                });
+            }
+        }
+        
+        return room;
     }
     
     /**
