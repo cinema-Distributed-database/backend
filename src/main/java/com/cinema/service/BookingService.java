@@ -170,8 +170,8 @@ public class BookingService {
     }
 
     public Optional<BookingAggregatedDetailsDto> lookupBookingDetails(String phone, String email) {
-        log.debug("Tra cứu booking chi tiết bằng mã xác nhận: {} và SĐT: {}", phone, email);
-        Optional<Booking> bookingOpt = bookingRepository.findByCustomerInfo_PhoneAndCustomerInfor_Email(phone, email);
+        log.debug("Tra cứu booking chi tiết bằng SĐT: {} và Email: {}", phone, email);
+        Optional<Booking> bookingOpt = bookingRepository.findByCustomerInfo_PhoneAndCustomerInfo_Email(phone, email);
         if (bookingOpt.isPresent()) {
             return bookingRepository.findBookingWithDetailsById(bookingOpt.get().getId());
         }

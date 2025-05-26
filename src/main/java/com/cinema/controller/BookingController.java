@@ -56,7 +56,7 @@ public class BookingController {
      */
     @PostMapping("/lookup")
     public ResponseEntity<ApiResponse<BookingAggregatedDetailsDto>> lookupBookingDetails(@Valid @RequestBody LookupBookingRequest request) {
-         log.info("Request tra cứu booking chi tiết với mã: {} và SĐT: {}", request.getPhone(), request.getEmail());
+         log.info("Request tra cứu booking chi tiết với SĐT: {} và Email: {}", request.getPhone(), request.getEmail());
         return bookingService.lookupBookingDetails(request.getPhone(), request.getEmail()) // Gọi phương thức service mới
                 .map(bookingDetails -> ResponseEntity.ok(ApiResponse.success(bookingDetails)))
                 .orElse(ResponseEntity.notFound().build());
