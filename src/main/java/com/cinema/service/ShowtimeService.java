@@ -1,10 +1,9 @@
 package com.cinema.service;
 
+import com.cinema.dto.response.ShowtimeSummaryDto;
+import com.cinema.enums.ShowtimeStatus;
 import com.cinema.model.Showtime;
 import com.cinema.repository.ShowtimeRepository;
-import com.cinema.enums.ShowtimeStatus;
-import com.cinema.dto.response.ShowtimeSummaryDto;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -12,6 +11,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -37,127 +37,49 @@ public class ShowtimeService {
         dto.setScreenType(showtime.getScreenType());
         dto.setTotalSeats(showtime.getTotalSeats());
         dto.setAvailableSeats(showtime.getAvailableSeats());
-        dto.setStatus(showtime.getStatusEnum());
+        // Sử dụng trực tiếp enum đã được refactor từ model
+        dto.setStatus(showtime.getStatus());
         return dto;
     }
 
     /**
      * Lấy danh sách suất chiếu có filter (trả về DTO tóm tắt).
-     * FIX: Sử dụng String status thay vì enum để match với DB
      */
-    public List<ShowtimeSummaryDto> getShowtimes(String movieId, String cinemaId, LocalDate date, String status) {
-        log.info("=== DEBUG: getShowtimes called ===");
-        log.info("movieId: {}", movieId);
-        log.info("cinemaId: {}", cinemaId);
-        log.info("date: {}", date);
-        log.info("status: {}", status);
-        
-        LocalDateTime startOfDay = date != null ? date.atStartOfDay() : null;
-        LocalDateTime endOfDay = date != null ? date.atTime(LocalTime.MAX) : null;
-        
-        // FIX: Sử dụng trực tiếp String status thay vì convert sang enum
-        String statusValue = (status != null && !status.trim().isEmpty()) ? status.trim() : "active";
-        
-        log.info("Using statusValue: {}", statusValue);
-        log.info("Date range: {} to {}", startOfDay, endOfDay);
+public List<ShowtimeSummaryDto> getShowtimes(String movieIdStr, String cinemaIdStr, LocalDate date, String statusString) {
+        log.info("Request lấy suất chiếu - movieId: {}, cinemaId: {}, date: {}, status: {}", movieIdStr, cinemaIdStr, date, statusString);
 
-        List<Showtime> showtimes;
+        ShowtimeStatus status = (statusString != null && !statusString.trim().isEmpty())
+                ? ShowtimeStatus.fromValue(statusString.trim())
+                : ShowtimeStatus.ACTIVE;
 
-        // FIX: Gọi repository methods với String status
-        if (movieId != null && cinemaId != null && date != null) {
-            log.info("Case 1: movieId + cinemaId + date + status");
-            showtimes = showtimeRepository.findByMovieIdAndCinemaIdAndShowDateTimeBetweenAndStatus(
-                    movieId, cinemaId, startOfDay, endOfDay, statusValue);
-        } else if (movieId != null && date != null) {
-            log.info("Case 2: movieId + date + status");
-            showtimes = showtimeRepository.findByMovieIdAndShowDateTimeBetweenAndStatus(
-                    movieId, startOfDay, endOfDay, statusValue);
-        } else if (cinemaId != null && date != null) {
-            log.info("Case 3: cinemaId + date + status");
-            showtimes = showtimeRepository.findByCinemaIdAndShowDateTimeBetweenAndStatus(
-                    cinemaId, startOfDay, endOfDay, statusValue);
-        } else if (date != null) {
-            log.info("Case 4: date + status");
-            showtimes = showtimeRepository.findByShowDateTimeBetweenAndStatus(startOfDay, endOfDay, statusValue);
-        } else if (movieId != null && cinemaId != null) {
-            log.info("Case 5: movieId + cinemaId + status (wide date range)");
-            LocalDateTime start = LocalDateTime.now().minusYears(1);
-            LocalDateTime end = LocalDateTime.now().plusYears(1);
-            showtimes = showtimeRepository.findByMovieIdAndCinemaIdAndShowDateTimeBetweenAndStatus(
-                    movieId, cinemaId, start, end, statusValue);
-        } else if (movieId != null) {
-            log.info("Case 6: movieId + status");
-            showtimes = showtimeRepository.findByMovieIdAndStatus(movieId, statusValue);
-        } else if (cinemaId != null) {
-            log.info("Case 7: cinemaId + status");
-            showtimes = showtimeRepository.findByCinemaIdAndStatus(cinemaId, statusValue);
-        } else {
-            log.info("Case 8: status only");
-            showtimes = showtimeRepository.findByStatus(statusValue);
+        // GỌI PHƯƠNG THỨC CUSTOM MỚI
+        List<Showtime> showtimes = showtimeRepository.findShowtimesByFlexibleFilters(movieIdStr, cinemaIdStr, date, status);
+
+        if (showtimes.isEmpty()) {
+            log.info("Không tìm thấy suất chiếu nào với các điều kiện đã cho.");
+            return Collections.emptyList();
         }
-        
-        log.info("Found {} showtimes", showtimes.size());
-        
-        // Debug: Log first few results
-        for (int i = 0; i < Math.min(3, showtimes.size()); i++) {
-            Showtime s = showtimes.get(i);
-            log.info("Showtime {}: id={}, movieId={}, status={}", i+1, s.getId(), s.getMovieId(), s.getStatus());
-        }
-        
+
+        log.info("Đã tìm thấy {} suất chiếu.", showtimes.size());
         return showtimes.stream()
-                        .map(this::convertToShowtimeSummaryDto)
-                        .collect(Collectors.toList());
+                .map(this::convertToShowtimeSummaryDto)
+                .collect(Collectors.toList());
     }
 
-    /**
-     * Lấy chi tiết một suất chiếu.
-     * FIX: Sử dụng String status
-     */
     public Optional<Showtime> getShowtimeById(String id) {
-        log.info("=== DEBUG: getShowtimeById called ===");
-        log.info("id: {}", id);
-        
-        // FIX: Sử dụng String thay vì enum
-        Optional<Showtime> result = showtimeRepository.findByIdAndStatus(id, "active");
-        
-        log.info("Found showtime: {}", result.isPresent());
-        if (result.isPresent()) {
-            Showtime s = result.get();
-            log.info("Showtime details: id={}, movieId={}, status={}", s.getId(), s.getMovieId(), s.getStatus());
-        }
-        
-        return result;
+        log.info("Request lấy chi tiết suất chiếu ID: {}", id);
+        // Phương thức này có thể giữ nguyên vì nó tìm theo _id của Showtime, luôn là String
+        return showtimeRepository.findByIdAndStatus(id, ShowtimeStatus.ACTIVE);
     }
-    
-    // ===== THÊM METHODS ĐỂ TEST =====
-    
-    /**
-     * Test method: Lấy tất cả showtimes không filter gì
-     */
+    // --- CÁC PHƯƠNG THỨC DEBUG/TEST ---
+
     public List<Showtime> getAllShowtimes() {
-        log.info("=== DEBUG: getAllShowtimes called ===");
-        List<Showtime> all = showtimeRepository.findAll();
-        log.info("Total showtimes in DB: {}", all.size());
-        
-        for (int i = 0; i < Math.min(5, all.size()); i++) {
-            Showtime s = all.get(i);
-            log.info("Showtime {}: id={}, movieId={}, cinemaId={}, status={}", 
-                    i+1, s.getId(), s.getMovieId(), s.getCinemaId(), s.getStatus());
-        }
-        
-        return all;
+        log.info("DEBUG: Lấy tất cả suất chiếu trong DB.");
+        return showtimeRepository.findAll();
     }
-    
-    /**
-     * Test method: Tìm theo movieId không có status filter
-     */
+
     public List<Showtime> getShowtimesByMovieIdOnly(String movieId) {
-        log.info("=== DEBUG: getShowtimesByMovieIdOnly called ===");
-        log.info("movieId: {}", movieId);
-        
-        List<Showtime> result = showtimeRepository.findByMovieId(movieId);
-        log.info("Found {} showtimes for movieId: {}", result.size(), movieId);
-        
-        return result;
+        log.info("DEBUG: Lấy suất chiếu theo movieId: {}", movieId);
+        return showtimeRepository.findByMovieId(movieId);
     }
 }

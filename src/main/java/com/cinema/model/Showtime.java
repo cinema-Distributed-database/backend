@@ -13,6 +13,7 @@ import lombok.AllArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import com.cinema.enums.ShowtimeStatus;
 
 @Data
 @NoArgsConstructor
@@ -37,19 +38,10 @@ public class Showtime {
     
     // Sử dụng String thay vì enum để tương thích với dữ liệu hiện tại
     @Field("status")
-    private String status;
+    private ShowtimeStatus status;
     
     private Map<String, SeatStatus> seatStatus;
     private boolean hasHoldingSeats;
-    
-    // Helper methods để làm việc với enum
-    public ShowtimeStatus getStatusEnum() {
-        return status != null ? ShowtimeStatus.fromValue(status) : null;
-    }
-    
-    public void setStatusEnum(ShowtimeStatus showtimeStatus) {
-        this.status = showtimeStatus != null ? showtimeStatus.getValue() : null;
-    }
     
     @Data
     @NoArgsConstructor

@@ -1,8 +1,8 @@
 package com.cinema.repository;
 
+import com.cinema.enums.ShowtimeStatus;
 import com.cinema.model.Showtime;
 import org.springframework.data.mongodb.repository.MongoRepository;
-import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -10,59 +10,55 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface ShowtimeRepository extends MongoRepository<Showtime, String> {
+public interface ShowtimeRepository extends MongoRepository<Showtime, String>, ShowtimeRepositoryCustom{
 
-    @Query("{ 'seatStatus': { $exists: true }, 'seatStatus': { $ne: {} } }")
-    List<Showtime> findShowtimesWithHoldingSeats();
+    // --- CÁC PHƯƠNG THỨC ĐƯỢC CẬP NHẬT ĐỂ DÙNG ENUM ---
 
-    List<Showtime> findByShowDateTimeBetween(LocalDateTime start, LocalDateTime end);
-
-    List<Showtime> findByCinemaIdAndShowDateTimeBetween(
-            String cinemaId, LocalDateTime start, LocalDateTime end);
-
-    // ===== FIX: Thay đổi từ ShowtimeStatus enum sang String để match với DB =====
-    
-    // Tìm kiếm với movieId (hỗ trợ cả ObjectId và String)
-    @Query("{ $and: [ " +
-           "{ $or: [ { 'movieId': ?0 }, { 'movieId': { $oid: ?0 } } ] }, " +
-           "{ 'cinemaId': ?1 }, " +
-           "{ 'showDateTime': { $gte: ?2, $lte: ?3 } }, " +
-           "{ 'status': ?4 } " +
-           "] }")
+    /**
+     * Tìm suất chiếu theo nhiều điều kiện, sử dụng ShowtimeStatus enum.
+     * Spring Data sẽ tự động sử dụng converter đã đăng ký.
+     */
     List<Showtime> findByMovieIdAndCinemaIdAndShowDateTimeBetweenAndStatus(
-            String movieId, String cinemaId, LocalDateTime startDateTime, LocalDateTime endDateTime, String status);
+            String movieId, String cinemaId, LocalDateTime startDateTime, LocalDateTime endDateTime, ShowtimeStatus status);
 
-    @Query("{ $and: [ " +
-           "{ $or: [ { 'movieId': ?0 }, { 'movieId': { $oid: ?0 } } ] }, " +
-           "{ 'showDateTime': { $gte: ?1, $lte: ?2 } }, " +
-           "{ 'status': ?3 } " +
-           "] }")
     List<Showtime> findByMovieIdAndShowDateTimeBetweenAndStatus(
-            String movieId, LocalDateTime startDateTime, LocalDateTime endDateTime, String status);
-            
+            String movieId, LocalDateTime startDateTime, LocalDateTime endDateTime, ShowtimeStatus status);
+
     List<Showtime> findByCinemaIdAndShowDateTimeBetweenAndStatus(
-            String cinemaId, LocalDateTime startDateTime, LocalDateTime endDateTime, String status);
+            String cinemaId, LocalDateTime startDateTime, LocalDateTime endDateTime, ShowtimeStatus status);
 
     List<Showtime> findByShowDateTimeBetweenAndStatus(
-            LocalDateTime startDateTime, LocalDateTime endDateTime, String status);
-            
-    @Query("{ $and: [ " +
-           "{ $or: [ { 'movieId': ?0 }, { 'movieId': { $oid: ?0 } } ] }, " +
-           "{ 'status': ?1 } " +
-           "] }")
-    List<Showtime> findByMovieIdAndStatus(String movieId, String status);
-    
-    List<Showtime> findByCinemaIdAndStatus(String cinemaId, String status);
+            LocalDateTime startDateTime, LocalDateTime endDateTime, ShowtimeStatus status);
 
-    Optional<Showtime> findByIdAndStatus(String id, String status);
-    
-    List<Showtime> findByStatus(String status);
+    List<Showtime> findByMovieIdAndStatus(String movieId, ShowtimeStatus status);
 
+    List<Showtime> findByCinemaIdAndStatus(String cinemaId, ShowtimeStatus status);
+
+    Optional<Showtime> findByIdAndStatus(String id, ShowtimeStatus status);
+
+    List<Showtime> findByStatus(ShowtimeStatus status);
+
+
+    // --- CÁC PHƯƠNG THỨC KHÁC ---
+
+    /**
+     * Tìm các suất chiếu đang có ghế ở trạng thái tạm giữ (HOLDING).
+     * Cờ này giúp tối ưu việc quét định kỳ để giải phóng ghế hết hạn.
+     */
     List<Showtime> findByHasHoldingSeatsTrue();
-    
-    // ===== Thêm methods không có status filter để test =====
-    @Query("{ $or: [ { 'movieId': ?0 }, { 'movieId': { $oid: ?0 } } ] }")
+
+    /**
+     * Tìm suất chiếu trong một khoảng thời gian (không phân biệt trạng thái).
+     */
+    List<Showtime> findByShowDateTimeBetween(LocalDateTime start, LocalDateTime end);
+
+    /**
+     * Tìm suất chiếu theo ID phim (không phân biệt trạng thái).
+     */
     List<Showtime> findByMovieId(String movieId);
-    
+
+    /**
+     * Tìm suất chiếu theo ID rạp (không phân biệt trạng thái).
+     */
     List<Showtime> findByCinemaId(String cinemaId);
 }

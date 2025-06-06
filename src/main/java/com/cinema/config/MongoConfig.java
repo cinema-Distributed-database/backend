@@ -15,6 +15,12 @@ import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory;
 import org.springframework.data.mongodb.core.convert.MappingMongoConverter;
 import org.springframework.data.mongodb.repository.config.EnableMongoRepositories;
 
+import com.cinema.config.converters.*;
+import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
+import java.util.ArrayList;
+import java.util.List;
+import org.springframework.core.convert.converter.Converter;
+
 @Configuration
 @EnableMongoRepositories(basePackages = "com.cinema.repository")
 public class MongoConfig extends AbstractMongoClientConfiguration {
@@ -51,6 +57,17 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
         MongoTemplate mongoTemplate = new MongoTemplate(mongoDatabaseFactory, converter);
         mongoTemplate.setReadPreference(ReadPreference.secondaryPreferred());
         return mongoTemplate;
+    }
+
+    @Bean
+    @Override
+    public MongoCustomConversions customConversions() {
+        List<Converter<?, ?>> converters = new ArrayList<>();
+        converters.add(new SeatStateToStringConverter());
+        converters.add(new StringToSeatStateConverter());
+        converters.add(new ShowtimeStatusToStringConverter());
+        converters.add(new StringToOldShowtimeStatusConverter());
+        return new MongoCustomConversions(converters);
     }
 
     @Bean
