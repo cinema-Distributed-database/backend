@@ -161,6 +161,11 @@ public class MongoIndexConfig {
                 .on("genres", Sort.Direction.ASC)
                 .named("idx_movie_genres"));
         log.info("Created index: idx_movie_genres on movies");
+
+        ops.ensureIndex(new Index()
+                .on("country", Sort.Direction.ASC)
+                .named("idx_movie_country"));
+        log.info("Created index: idx_movie_country on movies");
         
         TextIndexDefinition movieTextIndex = TextIndexDefinition.builder()
                 .onField("title", 2F)

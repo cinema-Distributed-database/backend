@@ -31,4 +31,5 @@ public class Movie {
     private String status;
     private List<String> tags;
     private Boolean isActive;
+    private String country;
 }

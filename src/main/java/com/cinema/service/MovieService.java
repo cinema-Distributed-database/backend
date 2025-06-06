@@ -58,7 +58,8 @@ public class MovieService {
         return movieRepository.findByGenresContainingAndIsActiveTrue(genre, pageable);
     }
 
-    public List<Movie> searchMoviesWithFilters(String keyword, String genre, String status) {
+    // --- CẬP NHẬT PHƯƠNG THỨC NÀY ---
+    public List<Movie> searchMoviesWithFilters(String keyword, String genre, String status, String country) {
         Query query = new Query();
 
         if (keyword != null && !keyword.trim().isEmpty()) {
@@ -73,6 +74,10 @@ public class MovieService {
         if (status != null && !status.trim().isEmpty()) {
             query.addCriteria(Criteria.where("status").is(status));
         }
+        
+        if (country != null && !country.trim().isEmpty()) { // THÊM BỘ LỌC COUNTRY
+            query.addCriteria(Criteria.where("country").is(country));
+        }
 
         query.addCriteria(Criteria.where("isActive").is(true));
 
@@ -84,11 +89,18 @@ public class MovieService {
      * Lấy danh sách thể loại phim
      */
     public List<String> getAllGenres() {
-        // --- BEGIN MODIFICATION ---
         return movieRepository.findDistinctGenres().stream()
                 .map(MovieRepository.GenreProjection::getGenre)
                 .collect(Collectors.toList());
-        // --- END MODIFICATION ---
+    }
+    
+    /**
+     * Lấy danh sách quốc gia
+     */
+    public List<String> getAllCountries() { // <-- THÊM PHƯƠNG THỨC MỚI
+        return movieRepository.findDistinctCountries().stream()
+                .map(MovieRepository.CountryProjection::getCountry)
+                .collect(Collectors.toList());
     }
 
     /**

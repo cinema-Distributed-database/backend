@@ -1,7 +1,6 @@
 package com.cinema.repository;
 
 import com.cinema.model.Showtime;
-import com.cinema.enums.ShowtimeStatus;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -21,26 +20,49 @@ public interface ShowtimeRepository extends MongoRepository<Showtime, String> {
     List<Showtime> findByCinemaIdAndShowDateTimeBetween(
             String cinemaId, LocalDateTime start, LocalDateTime end);
 
-    // Thay đổi từ String sang ShowtimeStatus
+    // ===== FIX: Thay đổi từ ShowtimeStatus enum sang String để match với DB =====
+    
+    // Tìm kiếm với movieId (hỗ trợ cả ObjectId và String)
+    @Query("{ $and: [ " +
+           "{ $or: [ { 'movieId': ?0 }, { 'movieId': { $oid: ?0 } } ] }, " +
+           "{ 'cinemaId': ?1 }, " +
+           "{ 'showDateTime': { $gte: ?2, $lte: ?3 } }, " +
+           "{ 'status': ?4 } " +
+           "] }")
     List<Showtime> findByMovieIdAndCinemaIdAndShowDateTimeBetweenAndStatus(
-            String movieId, String cinemaId, LocalDateTime startDateTime, LocalDateTime endDateTime, ShowtimeStatus status);
+            String movieId, String cinemaId, LocalDateTime startDateTime, LocalDateTime endDateTime, String status);
 
+    @Query("{ $and: [ " +
+           "{ $or: [ { 'movieId': ?0 }, { 'movieId': { $oid: ?0 } } ] }, " +
+           "{ 'showDateTime': { $gte: ?1, $lte: ?2 } }, " +
+           "{ 'status': ?3 } " +
+           "] }")
     List<Showtime> findByMovieIdAndShowDateTimeBetweenAndStatus(
-            String movieId, LocalDateTime startDateTime, LocalDateTime endDateTime, ShowtimeStatus status);
+            String movieId, LocalDateTime startDateTime, LocalDateTime endDateTime, String status);
             
     List<Showtime> findByCinemaIdAndShowDateTimeBetweenAndStatus(
-            String cinemaId, LocalDateTime startDateTime, LocalDateTime endDateTime, ShowtimeStatus status);
+            String cinemaId, LocalDateTime startDateTime, LocalDateTime endDateTime, String status);
 
     List<Showtime> findByShowDateTimeBetweenAndStatus(
-            LocalDateTime startDateTime, LocalDateTime endDateTime, ShowtimeStatus status);
+            LocalDateTime startDateTime, LocalDateTime endDateTime, String status);
             
-    List<Showtime> findByMovieIdAndStatus(String movieId, ShowtimeStatus status);
+    @Query("{ $and: [ " +
+           "{ $or: [ { 'movieId': ?0 }, { 'movieId': { $oid: ?0 } } ] }, " +
+           "{ 'status': ?1 } " +
+           "] }")
+    List<Showtime> findByMovieIdAndStatus(String movieId, String status);
     
-    List<Showtime> findByCinemaIdAndStatus(String cinemaId, ShowtimeStatus status);
+    List<Showtime> findByCinemaIdAndStatus(String cinemaId, String status);
 
-    Optional<Showtime> findByIdAndStatus(String id, ShowtimeStatus status);
+    Optional<Showtime> findByIdAndStatus(String id, String status);
     
-    List<Showtime> findByStatus(ShowtimeStatus status);
+    List<Showtime> findByStatus(String status);
 
     List<Showtime> findByHasHoldingSeatsTrue();
+    
+    // ===== Thêm methods không có status filter để test =====
+    @Query("{ $or: [ { 'movieId': ?0 }, { 'movieId': { $oid: ?0 } } ] }")
+    List<Showtime> findByMovieId(String movieId);
+    
+    List<Showtime> findByCinemaId(String cinemaId);
 }

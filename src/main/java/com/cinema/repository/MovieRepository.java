@@ -38,8 +38,19 @@ public interface MovieRepository extends MongoRepository<Movie, String> {
     interface GenreProjection {
         String getGenre();
     }
+    
+    @Aggregation(pipeline = {
+        "{ $match: { 'isActive': true, 'country': { $ne: null, $ne: '' } } }", // Lọc phim active và có country
+        "{ $group: { '_id': '$country' } }", // Nhóm theo country để lấy distinct
+        "{ $sort: { '_id': 1 } }",           // Sắp xếp theo tên quốc gia
+        "{ $project: { 'country': '$_id', '_id': 0 } }" // Đổi tên _id thành country
+    })
+    List<CountryProjection> findDistinctCountries();
 
-    // Hoặc nếu bạn muốn một method khác để lấy tất cả genres (không distinct) từ các phim active:
+    interface CountryProjection {
+        String getCountry();
+    }
+
     @Query(value = "{'isActive': true}", fields = "{'genres': 1, '_id': 0}")
     List<Movie> findActiveMoviesGenres();
     

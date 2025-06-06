@@ -2,7 +2,6 @@ package com.cinema.controller;
 
 import com.cinema.dto.ApiResponse;
 import com.cinema.model.Showtime;
-// Thêm import cho DTO mới
 import com.cinema.dto.response.ShowtimeSummaryDto;
 import com.cinema.service.ShowtimeService;
 
@@ -25,28 +24,59 @@ public class ShowtimeController {
 
     /**
      * GET /api/showtimes - Lấy lịch chiếu (có filter, trả về DTO tóm tắt)
-     * Query parameters: movieId, cinemaId, date (yyyy-MM-dd), status
      */
     @GetMapping
-    public ResponseEntity<ApiResponse<List<ShowtimeSummaryDto>>> getShowtimes( // Thay đổi kiểu trả về ở đây
+    public ResponseEntity<ApiResponse<List<ShowtimeSummaryDto>>> getShowtimes(
             @RequestParam(required = false) String movieId,
             @RequestParam(required = false) String cinemaId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) String status) {
-        log.info("Request lấy lịch chiếu với filter (summary) - movieId: {}, cinemaId: {}, date: {}, status: {}",
-                 movieId, cinemaId, date, status);
-        List<ShowtimeSummaryDto> showtimeSummaries = showtimeService.getShowtimes(movieId, cinemaId, date, status); // Gọi phương thức đã cập nhật
+        log.info("=== API REQUEST: GET /api/showtimes ===");
+        log.info("movieId: {}, cinemaId: {}, date: {}, status: {}", movieId, cinemaId, date, status);
+        
+        List<ShowtimeSummaryDto> showtimeSummaries = showtimeService.getShowtimes(movieId, cinemaId, date, status);
+        
+        log.info("=== API RESPONSE: {} showtimes found ===", showtimeSummaries.size());
         return ResponseEntity.ok(ApiResponse.success(showtimeSummaries));
     }
 
     /**
-     * GET /api/showtimes/{id} - Chi tiết suất chiếu (vẫn trả về Showtime đầy đủ)
+     * GET /api/showtimes/{id} - Chi tiết suất chiếu
      */
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<Showtime>> getShowtimeById(@PathVariable String id) {
-        log.info("Request lấy chi tiết suất chiếu: {}", id);
+        log.info("=== API REQUEST: GET /api/showtimes/{} ===", id);
+        
         return showtimeService.getShowtimeById(id)
-                .map(showtime -> ResponseEntity.ok(ApiResponse.success(showtime)))
-                .orElse(ResponseEntity.notFound().build()); //Sử dụng .orElse(ResponseEntity.notFound().build()); để trả 404 nếu không tìm thấy
+                .map(showtime -> {
+                    log.info("=== API RESPONSE: Showtime found ===");
+                    return ResponseEntity.ok(ApiResponse.success(showtime));
+                })
+                .orElseGet(() -> {
+                    log.info("=== API RESPONSE: Showtime not found ===");
+                    return ResponseEntity.notFound().build();
+                });
+    }
+    
+    // ===== THÊM TEST ENDPOINTS =====
+    
+    /**
+     * TEST: GET /api/showtimes/debug/all - Lấy tất cả showtimes
+     */
+    @GetMapping("/debug/all")
+    public ResponseEntity<ApiResponse<List<Showtime>>> getAllShowtimes() {
+        log.info("=== DEBUG API: GET /api/showtimes/debug/all ===");
+        List<Showtime> all = showtimeService.getAllShowtimes();
+        return ResponseEntity.ok(ApiResponse.success(all));
+    }
+    
+    /**
+     * TEST: GET /api/showtimes/debug/by-movie/{movieId} - Test tìm theo movieId
+     */
+    @GetMapping("/debug/by-movie/{movieId}")
+    public ResponseEntity<ApiResponse<List<Showtime>>> getByMovieIdOnly(@PathVariable String movieId) {
+        log.info("=== DEBUG API: GET /api/showtimes/debug/by-movie/{} ===", movieId);
+        List<Showtime> result = showtimeService.getShowtimesByMovieIdOnly(movieId);
+        return ResponseEntity.ok(ApiResponse.success(result));
     }
 }

@@ -72,17 +72,11 @@ public class MovieController {
     public ResponseEntity<ApiResponse<List<Movie>>> searchMovies(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String genre,
-            @RequestParam(required = false) String status) {
-        
-        List<Movie> movies;
-        
-        if (q != null && !q.trim().isEmpty()) {
-            movies = movieService.searchMoviesWithFilters(q, genre, status);
-        } else if (genre != null && !genre.trim().isEmpty()) {
-            movies = movieService.searchMoviesWithFilters(null, genre, status);
-        } else {
-            movies = movieService.searchMoviesWithFilters(null, null, status);
-        }
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String country) { // Thêm country
+
+        // Logic được đơn giản hóa, vì service đã xử lý các trường hợp null
+        List<Movie> movies = movieService.searchMoviesWithFilters(q, genre, status, country);
         
         return ResponseEntity.ok(ApiResponse.success(movies));
     }
