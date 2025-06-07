@@ -1,6 +1,7 @@
 package com.cinema.repository;
 
 import com.cinema.enums.ShowtimeStatus;
+import com.cinema.model.Cinema; // <<< THAY ĐỔI: Import model Cinema
 import com.cinema.model.Showtime;
 import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
@@ -14,51 +15,69 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors; // <<< THAY ĐỔI: Import Collectors
 
 @Repository
 @RequiredArgsConstructor
 public class ShowtimeRepositoryCustomImpl implements ShowtimeRepositoryCustom {
 
     private final MongoTemplate mongoTemplate;
+    private final CinemaRepository cinemaRepository; // <<< THAY ĐỔI: Inject CinemaRepository
 
+    // <<< THAY ĐỔI: Cập nhật toàn bộ phương thức
     @Override
-    public List<Showtime> findShowtimesByFlexibleFilters(String movieIdStr, String cinemaIdStr, LocalDate date, ShowtimeStatus status) {
+    public List<Showtime> findShowtimesByFlexibleFilters(String movieIdStr, String cinemaIdStr, String city, LocalDate startDate, LocalDate endDate, ShowtimeStatus status) {
         Query query = new Query();
         List<Criteria> allCriteria = new ArrayList<>();
 
-        // 1. Xử lý movieId (String hoặc ObjectId)
+        // 1. Lọc theo Thành phố (city)
+        List<String> cinemaIdsFromCity = new ArrayList<>();
+        if (city != null && !city.trim().isEmpty()) {
+            // Tìm tất cả rạp trong thành phố được chỉ định
+            List<Cinema> cinemasInCity = cinemaRepository.findByCityAndStatus(city, "active", null).getContent();
+            if (cinemasInCity.isEmpty()) {
+                // Nếu không có rạp nào trong thành phố này, không cần tìm suất chiếu nữa
+                return List.of();
+            }
+            // Lấy danh sách ID của các rạp đó
+            cinemaIdsFromCity = cinemasInCity.stream().map(Cinema::getId).collect(Collectors.toList());
+        }
+
+        // 2. Lọc theo Rạp (cinemaId)
+        if (cinemaIdStr != null && !cinemaIdStr.trim().isEmpty()) {
+            // Nếu người dùng đã chọn một rạp cụ thể
+            if (!cinemaIdsFromCity.isEmpty() && !cinemaIdsFromCity.contains(cinemaIdStr)) {
+                // Nếu rạp này không thuộc thành phố đã chọn -> không có kết quả
+                return List.of();
+            }
+            allCriteria.add(Criteria.where("cinemaId").is(cinemaIdStr));
+        } else if (!cinemaIdsFromCity.isEmpty()) {
+            // Nếu người dùng chỉ chọn thành phố, lọc theo tất cả các rạp trong thành phố đó
+            allCriteria.add(Criteria.where("cinemaId").in(cinemaIdsFromCity));
+        }
+
+
+        // 3. Lọc theo Phim (movieId)
         if (movieIdStr != null && !movieIdStr.trim().isEmpty()) {
-            // Tạo một $or condition
             List<Criteria> movieIdCriteria = new ArrayList<>();
-            // Luôn tìm kiếm dạng String
             movieIdCriteria.add(Criteria.where("movieId").is(movieIdStr));
-            // Nếu chuỗi hợp lệ, tìm kiếm thêm dạng ObjectId
             if (ObjectId.isValid(movieIdStr)) {
                 movieIdCriteria.add(Criteria.where("movieId").is(new ObjectId(movieIdStr)));
             }
             allCriteria.add(new Criteria().orOperator(movieIdCriteria));
         }
-
-        // 2. Xử lý cinemaId (tương tự movieId)
-        if (cinemaIdStr != null && !cinemaIdStr.trim().isEmpty()) {
-            List<Criteria> cinemaIdCriteria = new ArrayList<>();
-            cinemaIdCriteria.add(Criteria.where("cinemaId").is(cinemaIdStr));
-            if (ObjectId.isValid(cinemaIdStr)) {
-                cinemaIdCriteria.add(Criteria.where("cinemaId").is(new ObjectId(cinemaIdStr)));
-            }
-            allCriteria.add(new Criteria().orOperator(cinemaIdCriteria));
-        }
         
-        // 3. Xử lý khoảng thời gian (date)
-        if (date != null) {
-            LocalDateTime startOfDay = date.atStartOfDay();
-            LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
-            allCriteria.add(Criteria.where("showDateTime").gte(startOfDay).lte(endOfDay));
+        // 4. Lọc theo Khoảng thời gian (Date Range)
+        if (startDate != null) {
+            LocalDateTime startDateTime = startDate.atStartOfDay();
+            // Nếu không có endDate, mặc định lọc trong ngày startDate
+            LocalDateTime endDateTime = (endDate != null) ? endDate.atTime(LocalTime.MAX) : startDate.atTime(LocalTime.MAX);
+            allCriteria.add(Criteria.where("showDateTime").gte(startDateTime).lte(endDateTime));
         }
 
-        // 4. Xử lý trạng thái (status)
+
+        // 5. Lọc theo Trạng thái (status)
         if (status != null) {
-            // Sử dụng converter đã đăng ký, ta chỉ cần truyền enum
             allCriteria.add(Criteria.where("status").is(status));
         }
 
@@ -66,6 +85,9 @@ public class ShowtimeRepositoryCustomImpl implements ShowtimeRepositoryCustom {
         if (!allCriteria.isEmpty()) {
             query.addCriteria(new Criteria().andOperator(allCriteria));
         }
+        
+        // Sắp xếp kết quả theo thời gian chiếu
+        query.with(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "showDateTime"));
 
         return mongoTemplate.find(query, Showtime.class);
     }

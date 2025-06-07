@@ -25,16 +25,22 @@ public class ShowtimeController {
     /**
      * GET /api/showtimes - Lấy lịch chiếu (có filter, trả về DTO tóm tắt)
      */
+    // <<< THAY ĐỔI: Cập nhật các tham số @RequestParam
     @GetMapping
     public ResponseEntity<ApiResponse<List<ShowtimeSummaryDto>>> getShowtimes(
             @RequestParam(required = false) String movieId,
             @RequestParam(required = false) String cinemaId,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) String city, // <<< THAY ĐỔI: Thêm city
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate, // <<< THAY ĐỔI: Đổi `date` thành `startDate`
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,   // <<< THAY ĐỔI: Thêm `endDate`
             @RequestParam(required = false) String status) {
-        log.info("=== API REQUEST: GET /api/showtimes ===");
-        log.info("movieId: {}, cinemaId: {}, date: {}, status: {}", movieId, cinemaId, date, status);
         
-        List<ShowtimeSummaryDto> showtimeSummaries = showtimeService.getShowtimes(movieId, cinemaId, date, status);
+        log.info("=== API REQUEST: GET /api/showtimes ===");
+        log.info("movieId: {}, cinemaId: {}, city: {}, startDate: {}, endDate: {}, status: {}", 
+                 movieId, cinemaId, city, startDate, endDate, status); // <<< THAY ĐỔI: Cập nhật log
+        
+        // <<< THAY ĐỔI: Truyền các tham số mới vào service
+        List<ShowtimeSummaryDto> showtimeSummaries = showtimeService.getShowtimes(movieId, cinemaId, city, startDate, endDate, status);
         
         log.info("=== API RESPONSE: {} showtimes found ===", showtimeSummaries.size());
         return ResponseEntity.ok(ApiResponse.success(showtimeSummaries));

@@ -9,8 +9,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -37,7 +35,6 @@ public class ShowtimeService {
         dto.setScreenType(showtime.getScreenType());
         dto.setTotalSeats(showtime.getTotalSeats());
         dto.setAvailableSeats(showtime.getAvailableSeats());
-        // Sử dụng trực tiếp enum đã được refactor từ model
         dto.setStatus(showtime.getStatus());
         return dto;
     }
@@ -45,15 +42,17 @@ public class ShowtimeService {
     /**
      * Lấy danh sách suất chiếu có filter (trả về DTO tóm tắt).
      */
-public List<ShowtimeSummaryDto> getShowtimes(String movieIdStr, String cinemaIdStr, LocalDate date, String statusString) {
-        log.info("Request lấy suất chiếu - movieId: {}, cinemaId: {}, date: {}, status: {}", movieIdStr, cinemaIdStr, date, statusString);
+    // <<< THAY ĐỔI: Cập nhật signature của phương thức
+    public List<ShowtimeSummaryDto> getShowtimes(String movieIdStr, String cinemaIdStr, String city, LocalDate startDate, LocalDate endDate, String statusString) {
+        log.info("Request lấy suất chiếu - movieId: {}, cinemaId: {}, city: {}, startDate: {}, endDate: {}, status: {}", 
+                 movieIdStr, cinemaIdStr, city, startDate, endDate, statusString);
 
         ShowtimeStatus status = (statusString != null && !statusString.trim().isEmpty())
                 ? ShowtimeStatus.fromValue(statusString.trim())
                 : ShowtimeStatus.ACTIVE;
 
-        // GỌI PHƯƠNG THỨC CUSTOM MỚI
-        List<Showtime> showtimes = showtimeRepository.findShowtimesByFlexibleFilters(movieIdStr, cinemaIdStr, date, status);
+        // <<< THAY ĐỔI: Truyền các tham số mới vào phương thức repository
+        List<Showtime> showtimes = showtimeRepository.findShowtimesByFlexibleFilters(movieIdStr, cinemaIdStr, city, startDate, endDate, status);
 
         if (showtimes.isEmpty()) {
             log.info("Không tìm thấy suất chiếu nào với các điều kiện đã cho.");
@@ -68,11 +67,10 @@ public List<ShowtimeSummaryDto> getShowtimes(String movieIdStr, String cinemaIdS
 
     public Optional<Showtime> getShowtimeById(String id) {
         log.info("Request lấy chi tiết suất chiếu ID: {}", id);
-        // Phương thức này có thể giữ nguyên vì nó tìm theo _id của Showtime, luôn là String
         return showtimeRepository.findByIdAndStatus(id, ShowtimeStatus.ACTIVE);
     }
-    // --- CÁC PHƯƠNG THỨC DEBUG/TEST ---
 
+    // --- CÁC PHƯƠNG THỨC DEBUG/TEST ---
     public List<Showtime> getAllShowtimes() {
         log.info("DEBUG: Lấy tất cả suất chiếu trong DB.");
         return showtimeRepository.findAll();

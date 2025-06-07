@@ -13,7 +13,6 @@ import lombok.AllArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.Map;
-import com.cinema.enums.ShowtimeStatus;
 
 @Data
 @NoArgsConstructor
