@@ -2,15 +2,20 @@ package com.cinema.service;
 
 import com.cinema.dto.response.ShowtimeSummaryDto;
 import com.cinema.enums.ShowtimeStatus;
+import com.cinema.model.Cinema; // <<< THAY ĐỔI: Import model Cinema
 import com.cinema.model.Showtime;
+import com.cinema.repository.CinemaRepository; // <<< THAY ĐỔI: Import CinemaRepository
 import com.cinema.repository.ShowtimeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map; // <<< THAY ĐỔI: Import Map
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -20,38 +25,19 @@ import java.util.stream.Collectors;
 public class ShowtimeService {
 
     private final ShowtimeRepository showtimeRepository;
-
-    // Helper method để chuyển đổi Showtime sang ShowtimeSummaryDto
-    private ShowtimeSummaryDto convertToShowtimeSummaryDto(Showtime showtime) {
-        if (showtime == null) {
-            return null;
-        }
-        ShowtimeSummaryDto dto = new ShowtimeSummaryDto();
-        dto.setId(showtime.getId());
-        dto.setMovieId(showtime.getMovieId());
-        dto.setCinemaId(showtime.getCinemaId());
-        dto.setRoomId(showtime.getRoomId());
-        dto.setShowDateTime(showtime.getShowDateTime());
-        dto.setScreenType(showtime.getScreenType());
-        dto.setTotalSeats(showtime.getTotalSeats());
-        dto.setAvailableSeats(showtime.getAvailableSeats());
-        dto.setStatus(showtime.getStatus());
-        return dto;
-    }
+    private final CinemaRepository cinemaRepository; // <<< THAY ĐỔI: Inject CinemaRepository
 
     /**
      * Lấy danh sách suất chiếu có filter (trả về DTO tóm tắt).
      */
-    // <<< THAY ĐỔI: Cập nhật signature của phương thức
     public List<ShowtimeSummaryDto> getShowtimes(String movieIdStr, String cinemaIdStr, String city, LocalDate startDate, LocalDate endDate, String statusString) {
-        log.info("Request lấy suất chiếu - movieId: {}, cinemaId: {}, city: {}, startDate: {}, endDate: {}, status: {}", 
-                 movieIdStr, cinemaIdStr, city, startDate, endDate, statusString);
+        log.info("Request lấy suất chiếu - movieId: {}, cinemaId: {}, city: {}, startDate: {}, endDate: {}, status: {}",
+                movieIdStr, cinemaIdStr, city, startDate, endDate, statusString);
 
         ShowtimeStatus status = (statusString != null && !statusString.trim().isEmpty())
                 ? ShowtimeStatus.fromValue(statusString.trim())
                 : ShowtimeStatus.ACTIVE;
 
-        // <<< THAY ĐỔI: Truyền các tham số mới vào phương thức repository
         List<Showtime> showtimes = showtimeRepository.findShowtimesByFlexibleFilters(movieIdStr, cinemaIdStr, city, startDate, endDate, status);
 
         if (showtimes.isEmpty()) {
@@ -59,9 +45,41 @@ public class ShowtimeService {
             return Collections.emptyList();
         }
 
-        log.info("Đã tìm thấy {} suất chiếu.", showtimes.size());
+        // 1. Lấy danh sách các cinemaId duy nhất từ kết quả suất chiếu
+        List<String> cinemaIds = showtimes.stream()
+                .map(Showtime::getCinemaId)
+                .distinct()
+                .collect(Collectors.toList());
+
+        // 2. Gọi DB một lần duy nhất để lấy tất cả thông tin rạp phim cần thiết
+        Map<String, Cinema> cinemaMap = cinemaRepository.findAllById(cinemaIds).stream()
+                .collect(Collectors.toMap(Cinema::getId, cinema -> cinema));
+
+        log.info("Đã tìm thấy {} suất chiếu và thông tin của {} rạp phim tương ứng.", showtimes.size(), cinemaMap.size());
+        
+        // 3. Chuyển đổi Showtime sang DTO và điền thêm thông tin từ rạp phim
         return showtimes.stream()
-                .map(this::convertToShowtimeSummaryDto)
+                .map(showtime -> {
+                    ShowtimeSummaryDto dto = new ShowtimeSummaryDto();
+                    dto.setId(showtime.getId());
+                    dto.setMovieId(showtime.getMovieId());
+                    dto.setCinemaId(showtime.getCinemaId());
+                    dto.setRoomId(showtime.getRoomId());
+                    dto.setShowDateTime(showtime.getShowDateTime());
+                    dto.setScreenType(showtime.getScreenType());
+                    dto.setTotalSeats(showtime.getTotalSeats());
+                    dto.setAvailableSeats(showtime.getAvailableSeats());
+                    dto.setStatus(showtime.getStatus());
+
+                    // Lấy thông tin rạp từ Map đã truy vấn
+                    Cinema cinema = cinemaMap.get(showtime.getCinemaId());
+                    if (cinema != null) {
+                        dto.setCinemaName(cinema.getName());
+                        dto.setCinemaAddress(cinema.getAddress());
+                    }
+
+                    return dto;
+                })
                 .collect(Collectors.toList());
     }
 

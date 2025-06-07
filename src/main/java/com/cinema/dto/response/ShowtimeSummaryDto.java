@@ -24,7 +24,6 @@ public class ShowtimeSummaryDto {
     private Integer totalSeats;
     private Integer availableSeats;
     private ShowtimeStatus status; // Sử dụng trực tiếp kiểu enum ShowtimeStatus
-    // Không bao gồm: private Map<String, Showtime.SeatStatus> seatStatus;
-    // Không bao gồm: private boolean hasHoldingSeats;
-    // Không bao gồm: private Showtime.PricingTiers pricingTiers; (Tùy chọn, có thể thêm nếu cần)
+    private String cinemaName;
+    private String cinemaAddress;
 }
