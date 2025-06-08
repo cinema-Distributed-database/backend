@@ -69,6 +69,7 @@ public class VNPayService implements IVNPayService {
             payment.setStatus(PaymentStatusType.PENDING);
             payment.setPaymentMethod(PaymentMethodType.VNPAY); // Sử dụng Enum bạn đã tạo
             payment.setCreatedAt(LocalDateTime.now());
+            payment.setConfirmationCode(booking.getConfirmationCode()); // Lưu confirmation code để đối soát sau này
             
             // vnp_TxnRef nên là duy nhất cho mỗi giao dịch thanh toán.
             // Kết hợp ID của payment record với một số ngẫu nhiên để đảm bảo tính duy nhất cao.
@@ -93,6 +94,7 @@ public class VNPayService implements IVNPayService {
             vnpParams.put("vnp_Locale", "vn");
             vnpParams.put("vnp_ReturnUrl", finalReturnUrl); 
             vnpParams.put("vnp_IpAddr", vnpIpAddr);
+            vnpParams.put("confirmationCode", payment.getConfirmationCode());
 
             Calendar cld = Calendar.getInstance(TimeZone.getTimeZone("Etc/GMT+7"));
             SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMddHHmmss");

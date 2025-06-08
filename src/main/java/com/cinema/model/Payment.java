@@ -31,4 +31,5 @@ public class Payment {
     private String bankCode; // Mã ngân hàng
     private String vnpSecureHash; // Chữ ký bảo mật
     private Map<String, String> paymentLog; // Lưu toàn bộ params từ VNPay callback để đối soát
+    private String confirmationCode;
 }

@@ -3,8 +3,10 @@ package com.cinema.controller;
 import com.cinema.dto.ApiResponse;
 import com.cinema.dto.request.CreatePaymentRequestDto;
 import com.cinema.dto.response.CreatePaymentResponseDto;
-import com.cinema.model.Payment; // Model bạn đã tạo
-import com.cinema.enums.*; // Import the payment status enum
+import com.cinema.model.Booking; // *** THÊM IMPORT NÀY ***
+import com.cinema.model.Payment;
+import com.cinema.enums.*;
+import com.cinema.repository.BookingRepository; // *** THÊM IMPORT NÀY ***
 import com.cinema.service.IVNPayService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -28,8 +30,8 @@ import java.util.Optional;
 public class PaymentController {
 
     private final IVNPayService vnPayService;
+    private final BookingRepository bookingRepository; // *** INJECT BOOKING REPOSITORY ***
     
-    // URL trang kết quả thanh toán của Frontend (cấu hình trong application.properties)
     @Value("${frontend.payment.success-url}")
     private String frontendSuccessUrl;
 
@@ -49,75 +51,58 @@ public class PaymentController {
         }
     }
 
-    // VNPay IPN (Instant Payment Notification) URL - Server to Server
+    // Endpoint này là IPN, KHÔNG SỬA ĐỔI NỘI DUNG TRẢ VỀ
     @GetMapping("/vnpay/callback")
     public ResponseEntity<String> vnpayIPNCallback(@RequestParam Map<String, String> vnpParams) {
         log.info("VNPay IPN callback. Params: {}", vnpParams);
         try {
             Payment paymentResult = vnPayService.processVnpayCallback(vnpParams);
-            // Theo tài liệu VNPay, IPN cần trả về mã để VNPay biết đã nhận được.
-            if ("00".equals(paymentResult.getResponseCode())) { // Giao dịch thành công theo VNPay
+            if ("00".equals(paymentResult.getResponseCode())) {
                 log.info("VNPay IPN xử lý thành công cho TxnRef: {}", paymentResult.getTransactionId());
                 return ResponseEntity.ok("{\"RspCode\":\"00\",\"Message\":\"Confirm Success\"}");
-            } else { // Giao dịch thất bại hoặc lỗi theo VNPay
+            } else {
                 log.warn("VNPay IPN báo lỗi/thất bại cho TxnRef: {}. ResponseCode: {}", paymentResult.getTransactionId(), paymentResult.getResponseCode());
-                // Trả về mã lỗi tương ứng nếu có, hoặc mã chung
                 return ResponseEntity.ok("{\"RspCode\":\"" + paymentResult.getResponseCode() + "\",\"Message\":\"Transaction " + paymentResult.getStatus().name() + "\"}");
             }
         } catch (IllegalArgumentException e) {
             log.warn("Lỗi xử lý VNPay IPN (tham số không hợp lệ): {}", e.getMessage());
-            return ResponseEntity.ok("{\"RspCode\":\"97\",\"Message\":\"Invalid Checksum or Transaction Data\"}"); // 97: Chữ ký không hợp lệ
+            return ResponseEntity.ok("{\"RspCode\":\"97\",\"Message\":\"Invalid Checksum or Transaction Data\"}");
         } catch (Exception e) {
             log.error("Lỗi không mong muốn khi xử lý VNPay IPN: ", e);
-            return ResponseEntity.ok("{\"RspCode\":\"99\",\"Message\":\"System Error\"}"); // 99: Lỗi không xác định
+            return ResponseEntity.ok("{\"RspCode\":\"99\",\"Message\":\"System Error\"}");
         }
     }
     
-    // VNPay Return URL - Client Browser Redirect
+    // *** CẬP NHẬT PHƯƠNG THỨC NÀY ***
     @GetMapping("/vnpay/return")
     public RedirectView vnpayReturn(@RequestParam Map<String, String> vnpParams) {
         log.info("VNPay return URL. Params: {}", vnpParams);
         String redirectUrlStr;
-        String bookingIdForRedirect = "unknown_booking"; // Giá trị mặc định nếu không lấy được bookingId
 
         try {
             Payment paymentResult = vnPayService.processVnpayReturn(vnpParams);
-            bookingIdForRedirect = paymentResult.getBookingId(); // Lấy bookingId từ paymentResult
+
+            // Lấy confirmationCode từ bookingId trong paymentResult
+            String confirmationCode = bookingRepository.findById(paymentResult.getBookingId())
+                                        .map(Booking::getConfirmationCode)
+                                        .orElse("NOT_FOUND"); // Giá trị mặc định nếu không tìm thấy
 
             String status = paymentResult.getStatus().name().toLowerCase();
-            String paymentId = paymentResult.getId();
-            String transactionId = paymentResult.getTransactionId();
             String responseCode = paymentResult.getResponseCode();
             String message;
 
             if (paymentResult.getStatus() == PaymentStatusType.COMPLETED) {
                  message = "Thanh toán thành công!";
-                 redirectUrlStr = String.format("%s?bookingId=%s&paymentId=%s&status=%s&transactionId=%s&code=%s&message=%s",
-                                               frontendSuccessUrl, bookingIdForRedirect, paymentId, status, transactionId, responseCode, URLEncoder.encode(message, StandardCharsets.UTF_8));
+                 redirectUrlStr = String.format("%s?confirmationCode=%s&status=%s&code=%s&message=%s",
+                                               frontendSuccessUrl, confirmationCode, status, responseCode, URLEncoder.encode(message, StandardCharsets.UTF_8));
             } else {
-                 message = "Thanh toán thất bại. Mã lỗi VNPay: " + responseCode + ". Vui lòng liên hệ hỗ trợ nếu cần.";
-                 if (paymentResult.getStatus() == PaymentStatusType.FAILED && "97".equals(responseCode)){
-                     message = "Chữ ký không hợp lệ từ VNPay hoặc thông tin giao dịch không đúng. Vui lòng thử lại hoặc liên hệ hỗ trợ.";
-                 }
-                 redirectUrlStr = String.format("%s?bookingId=%s&paymentId=%s&status=%s&transactionId=%s&code=%s&message=%s",
-                                               frontendFailureUrl, bookingIdForRedirect, paymentId, status, transactionId, responseCode, URLEncoder.encode(message, StandardCharsets.UTF_8));
+                 message = "Thanh toán thất bại. Mã lỗi VNPay: " + responseCode;
+                 redirectUrlStr = String.format("%s?confirmationCode=%s&status=%s&code=%s&message=%s",
+                                               frontendFailureUrl, confirmationCode, status, responseCode, URLEncoder.encode(message, StandardCharsets.UTF_8));
             }
         } catch (IllegalArgumentException e) {
-            log.warn("Lỗi xử lý VNPay return (tham số không hợp lệ hoặc giao dịch không tìm thấy): {}", e.getMessage());
-            // Cố gắng lấy bookingId từ params nếu có, nhưng không phải là cách tin cậy
-            String rawTxnRef = vnpParams.get("vnp_TxnRef");
-            if (rawTxnRef != null && rawTxnRef.contains("_")) { // Kiểm tra lại logic parse này
-                 // Nếu bạn chắc chắn rằng bookingId có thể được trích xuất một cách an toàn từ TxnRef
-                 // (ví dụ, nếu paymentId được tạo dựa trên bookingId) thì có thể dùng.
-                 // Tuy nhiên, tốt nhất là nên có payment record để lấy bookingId.
-                 // Trong trường hợp này, processVnpayReturn nên throw lỗi nếu không tìm thấy payment
-                 // và không nên cố gắng lấy bookingId từ vnp_TxnRef ở controller.
-            }
-            // bookingIdForRedirect có thể vẫn là "unknown_booking" nếu không tìm thấy Payment record
-            // hoặc nếu logic lấy bookingId từ vnpParams không thành công/không an toàn.
-            // Thường thì nếu processVnpayReturn throw exception, chúng ta không có paymentResult.
-            // Nên redirect về trang lỗi chung hơn.
-            redirectUrlStr = String.format("%s?error=%s&code=CLIENT_ERROR", // Sử dụng bookingIdForRedirect nếu có
+            log.warn("Lỗi xử lý VNPay return: {}", e.getMessage());
+            redirectUrlStr = String.format("%s?error=%s&code=CLIENT_ERROR", 
                                            frontendFailureUrl, URLEncoder.encode(e.getMessage(), StandardCharsets.UTF_8));
         } catch (Exception e) {
             log.error("Lỗi không mong muốn khi xử lý VNPay return: ", e);
@@ -128,11 +113,9 @@ public class PaymentController {
         return new RedirectView(redirectUrlStr);
     }
 
-    // Endpoint để client kiểm tra trạng thái thanh toán (nếu cần)
     @GetMapping("/{paymentReference}")
     public ResponseEntity<ApiResponse<Payment>> getPaymentStatus(@PathVariable String paymentReference) {
         log.info("Yêu cầu kiểm tra trạng thái thanh toán cho mã tham chiếu: {}", paymentReference);
-        // Có thể tìm theo paymentId hoặc transactionId (vnp_TxnRef)
         Optional<Payment> paymentOpt = vnPayService.getPaymentById(paymentReference);
         if (paymentOpt.isEmpty()) {
             paymentOpt = vnPayService.getPaymentByTransactionId(paymentReference);
