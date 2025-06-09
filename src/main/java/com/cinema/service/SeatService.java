@@ -17,6 +17,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import org.springframework.data.mongodb.core.MongoTemplate; 
+import org.springframework.data.mongodb.core.query.Criteria; 
+import org.springframework.data.mongodb.core.query.Query;    
+import org.springframework.data.mongodb.core.query.Update;    
+import com.mongodb.client.result.UpdateResult;     
 
 @Slf4j
 @Service
@@ -24,7 +29,8 @@ import java.util.stream.Collectors;
 public class SeatService {
 
     private final ShowtimeRepository showtimeRepository;
-    private final AppProperties appProperties; // Để lấy HOLD_EXPIRY_MINUTES
+    private final AppProperties appProperties; 
+    private final MongoTemplate mongoTemplate;
 
     // Cache không còn cần thiết nếu dựa hoàn toàn vào DB state và scheduled job
     // private final Map<String, LocalDateTime> seatHoldCache = new ConcurrentHashMap<>();
@@ -118,36 +124,43 @@ public class SeatService {
     // Trong phương thức holdSeats
     @Transactional
     public boolean holdSeats(String showtimeId, List<String> seatIds, String customerPhone) {
-        log.info("Attempting to hold seats for showtimeId: {}, seats: {}", showtimeId, seatIds);
-        Showtime showtime = showtimeRepository.findById(showtimeId)
-                .orElseThrow(() -> new IllegalArgumentException("Showtime không tồn tại: " + showtimeId));
-
-        Map<String, Showtime.SeatStatus> seatStatusMap = showtime.getSeatStatus();
-        if (seatStatusMap == null) {
-            seatStatusMap = new ConcurrentHashMap<>();
-            showtime.setSeatStatus(seatStatusMap);
-        }
-
-        for (String seatId : seatIds) {
-            Showtime.SeatStatus currentStatus = seatStatusMap.get(seatId);
-            if (currentStatus != null && !SeatState.AVAILABLE.equals(currentStatus.getStatus())) {
-                log.warn("Ghế {} không còn trống hoặc không hợp lệ để giữ. Trạng thái hiện tại: {}", seatId, currentStatus.getStatus());
-                throw new IllegalStateException("Ghế " + seatId + " không còn trống hoặc đã được giữ.");
-            }
-        }
-
+        log.info("Attempting to hold seats atomically for showtimeId: {}, seats: {}", showtimeId, seatIds);
         LocalDateTime now = LocalDateTime.now();
+
+        // Vòng lặp để thử giữ từng ghế một cách nguyên tử
         for (String seatId : seatIds) {
-            Showtime.SeatStatus newStatus = seatStatusMap.getOrDefault(seatId, new Showtime.SeatStatus()); 
-            newStatus.setStatus(SeatState.HOLDING);
-            newStatus.setHoldStartedAt(now);
-            seatStatusMap.put(seatId, newStatus);
-            log.debug("Đã giữ ghế: ShowtimeID={}, SeatID={}, HeldAt={}", showtimeId, seatId, now);
+            // Điều kiện: tìm suất chiếu với ID, và ghế cụ thể phải đang AVAILABLE hoặc chưa tồn tại trong map
+            Query query = new Query(Criteria.where("_id").is(showtimeId)
+                .orOperator(
+                    Criteria.where("seatStatus." + seatId).exists(false),
+                    Criteria.where("seatStatus." + seatId + ".status").is(SeatState.AVAILABLE)
+                )
+            );
+
+            // Thao tác: đặt trạng thái ghế thành HOLDING
+            Update update = new Update()
+                    .set("seatStatus." + seatId + ".status", SeatState.HOLDING)
+                    .set("seatStatus." + seatId + ".holdStartedAt", now);
+            
+            UpdateResult result = mongoTemplate.updateFirst(query, update, Showtime.class);
+
+            // Nếu không có document nào được cập nhật, nghĩa là ghế đã bị người khác giữ.
+            if (result.getModifiedCount() == 0) {
+                log.warn("Failed to hold seat {}. It was not available or showtimeId is invalid.", seatId);
+                // Ném exception để @Transactional tự động rollback các ghế đã giữ thành công trước đó trong cùng request này.
+                throw new IllegalStateException("Ghế " + seatId + " không còn trống hoặc đã được giữ. Vui lòng chọn ghế khác.");
+            }
+            log.debug("Atomically held seat: ShowtimeID={}, SeatID={}", showtimeId, seatId);
         }
 
+        // Sau khi giữ tất cả các ghế thành công, cập nhật lại số ghế trống và cờ hasHoldingSeats
+        Showtime showtime = showtimeRepository.findById(showtimeId)
+                .orElseThrow(() -> new IllegalStateException("Không thể tìm thấy lại showtime sau khi giữ ghế. Lỗi nghiêm trọng."));
+                
         updateAvailableSeatsCount(showtime);
         showtime.setHasHoldingSeats(true);
         showtimeRepository.save(showtime);
+
         log.info("Đã giữ thành công {} ghế cho Showtime {}: {}", seatIds.size(), showtimeId, seatIds);
         return true;
     }

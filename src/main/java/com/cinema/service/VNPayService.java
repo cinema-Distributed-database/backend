@@ -94,7 +94,6 @@ public class VNPayService implements IVNPayService {
             vnpParams.put("vnp_Locale", "vn");
             vnpParams.put("vnp_ReturnUrl", finalReturnUrl); 
             vnpParams.put("vnp_IpAddr", vnpIpAddr);
-            vnpParams.put("confirmationCode", payment.getConfirmationCode());
 
             Calendar cld = Calendar.getInstance(TimeZone.getTimeZone("Etc/GMT+7"));
             SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMddHHmmss");

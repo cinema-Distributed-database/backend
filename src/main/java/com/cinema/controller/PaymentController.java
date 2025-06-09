@@ -55,21 +55,36 @@ public class PaymentController {
     @GetMapping("/vnpay/callback")
     public ResponseEntity<String> vnpayIPNCallback(@RequestParam Map<String, String> vnpParams) {
         log.info("VNPay IPN callback. Params: {}", vnpParams);
+        String confirmationCode = "UNKNOWN"; // Giá trị mặc định
+
         try {
             Payment paymentResult = vnPayService.processVnpayCallback(vnpParams);
+
+            // Lấy confirmationCode từ booking liên quan
+            confirmationCode = bookingRepository.findById(paymentResult.getBookingId())
+                    .map(Booking::getConfirmationCode)
+                    .orElse("NOT_FOUND");
+
             if ("00".equals(paymentResult.getResponseCode())) {
                 log.info("VNPay IPN xử lý thành công cho TxnRef: {}", paymentResult.getTransactionId());
-                return ResponseEntity.ok("{\"RspCode\":\"00\",\"Message\":\"Confirm Success\"}");
+                // Thêm confirmationCode vào response
+                return ResponseEntity.ok(String.format("{\"RspCode\":\"00\",\"Message\":\"Confirm Success\",\"confirmationCode\":\"%s\"}", confirmationCode));
             } else {
                 log.warn("VNPay IPN báo lỗi/thất bại cho TxnRef: {}. ResponseCode: {}", paymentResult.getTransactionId(), paymentResult.getResponseCode());
-                return ResponseEntity.ok("{\"RspCode\":\"" + paymentResult.getResponseCode() + "\",\"Message\":\"Transaction " + paymentResult.getStatus().name() + "\"}");
+                // Thêm confirmationCode vào response
+                return ResponseEntity.ok(String.format("{\"RspCode\":\"%s\",\"Message\":\"Transaction %s\",\"confirmationCode\":\"%s\"}",
+                        paymentResult.getResponseCode(), paymentResult.getStatus().name(), confirmationCode));
             }
         } catch (IllegalArgumentException e) {
             log.warn("Lỗi xử lý VNPay IPN (tham số không hợp lệ): {}", e.getMessage());
-            return ResponseEntity.ok("{\"RspCode\":\"97\",\"Message\":\"Invalid Checksum or Transaction Data\"}");
+            // Cố gắng lấy confirmationCode từ DB thông qua mã giao dịch trong params
+            confirmationCode = getConfirmationCodeFromTxnRef(vnpParams.get("vnp_TxnRef"));
+            return ResponseEntity.ok(String.format("{\"RspCode\":\"97\",\"Message\":\"Invalid Checksum or Transaction Data\",\"confirmationCode\":\"%s\"}", confirmationCode));
         } catch (Exception e) {
             log.error("Lỗi không mong muốn khi xử lý VNPay IPN: ", e);
-            return ResponseEntity.ok("{\"RspCode\":\"99\",\"Message\":\"System Error\"}");
+            // Cố gắng lấy confirmationCode từ DB thông qua mã giao dịch trong params
+            confirmationCode = getConfirmationCodeFromTxnRef(vnpParams.get("vnp_TxnRef"));
+            return ResponseEntity.ok(String.format("{\"RspCode\":\"99\",\"Message\":\"System Error\",\"confirmationCode\":\"%s\"}", confirmationCode));
         }
     }
     
@@ -125,5 +140,20 @@ public class PaymentController {
                 .map(payment -> ResponseEntity.ok(ApiResponse.success(payment)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                                              .body(ApiResponse.error("Không tìm thấy thông tin thanh toán cho mã: " + paymentReference)));
+    }
+
+        private String getConfirmationCodeFromTxnRef(String txnRef) {
+        if (txnRef == null || txnRef.isEmpty()) {
+            return "UNKNOWN_TXN_REF";
+        }
+        try {
+            return vnPayService.getPaymentByTransactionId(txnRef)
+                    .flatMap(payment -> bookingRepository.findById(payment.getBookingId()))
+                    .map(Booking::getConfirmationCode)
+                    .orElse("NOT_FOUND_IN_ERROR");
+        } catch (Exception ex) {
+            log.error("Không thể lấy confirmationCode từ txnRef {} trong khi xử lý lỗi: {}", txnRef, ex.getMessage());
+            return "DB_ERROR_ON_LOOKUP";
+        }
     }
 }

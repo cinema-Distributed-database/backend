@@ -16,7 +16,7 @@ import org.springframework.data.mongodb.core.index.TextIndexDefinition;
 
 import jakarta.annotation.PostConstruct;
 
-@Configuration
+@Configuration 
 @Slf4j
 @RequiredArgsConstructor
 public class MongoIndexConfig {
