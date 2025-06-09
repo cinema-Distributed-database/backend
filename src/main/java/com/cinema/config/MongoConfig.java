@@ -55,7 +55,7 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
         // Sử dụng MongoDatabaseFactory (kiểu cha) làm kiểu tham số đầu tiên
         // Spring sẽ tự động inject bean SimpleMongoClientDatabaseFactory đã được đánh dấu @Primary vào đây.
         MongoTemplate mongoTemplate = new MongoTemplate(mongoDatabaseFactory, converter);
-        mongoTemplate.setReadPreference(ReadPreference.primary());
+        mongoTemplate.setReadPreference(ReadPreference.secondaryPreferred());
         return mongoTemplate;
     }
 
