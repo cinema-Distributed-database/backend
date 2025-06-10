@@ -1,7 +1,3 @@
-Chắc chắn rồi! Dưới đây là tệp `README.md` chi tiết cho thư mục backend của bạn, bao gồm hướng dẫn thiết lập MongoDB Replica Set và cách chạy ứng dụng. Các thông tin nhạy cảm đã được ẩn đi.
-
----
-
 # Backend Rạp chiếu phim
 
 Dự án này là dịch vụ backend cho một hệ thống đặt vé xem phim, được xây dựng bằng Spring Boot và sử dụng MongoDB làm cơ sở dữ liệu. Backend hỗ trợ các tính năng như quản lý phim, rạp chiếu, lịch chiếu, đặt vé, và thanh toán qua cổng VNPay.
