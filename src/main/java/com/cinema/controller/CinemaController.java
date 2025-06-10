@@ -71,7 +71,7 @@ public class CinemaController {
     @GetMapping("/by-city/{city}")
     public ResponseEntity<ApiResponse<Page<Cinema>>> getCinemasByCity(
             @PathVariable String city,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @PageableDefault(size = 400) Pageable pageable) {
         
         Page<Cinema> cinemas = cinemaService.getCinemasByCity(city, pageable);
         return ResponseEntity.ok(ApiResponse.success(cinemas));
